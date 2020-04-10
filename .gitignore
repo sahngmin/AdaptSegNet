@@ -2,3 +2,7 @@
 *.pth
 *.png
 *.jpg
+
+.idea/
+data/
+python2_code/
