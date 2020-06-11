@@ -131,12 +131,9 @@ class ResNetMulti(nn.Module):
         for i in self.bn1.parameters():
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
-<<<<<<< HEAD
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)# change
-=======
+
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)  # change
->>>>>>> smyoo
+
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
@@ -187,9 +184,6 @@ class ResNetMulti(nn.Module):
 
         x2 = self.layer4(x)
         x2 = self.layer6(x2)
-<<<<<<< HEAD
-        return x1, x2
-=======
 
         x1_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x1)
         x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
@@ -198,7 +192,6 @@ class ResNetMulti(nn.Module):
         x2_warped = self.warp(x2_up, warper)
 
         return x1_warped, x2_warped
->>>>>>> smyoo
 
     def get_1x_lr_params_NOscale(self):
         """

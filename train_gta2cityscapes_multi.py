@@ -33,15 +33,13 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
-DATA_DIRECTORY = '/work/GTA5'
+# DATA_DIRECTORY = '/work/GTA5'
+DATA_DIRECTORY =  '/home/smyoo/CAG_UDA/dataset/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
-<<<<<<< HEAD
-DATA_DIRECTORY_TARGET = '/work/CityScapes'
-=======
+# DATA_DIRECTORY_TARGET = '/work/CityScapes'
 DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
->>>>>>> smyoo
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 LEARNING_RATE = 2.5e-4
@@ -148,13 +146,11 @@ def get_arguments():
                         help="choose adaptation set.")
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
-
-<<<<<<< HEAD
     parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
     parser.add_argument("--multi-gpu", action='store_false')
-=======
+
     parser.add_argument("--warper", default=True)
->>>>>>> smyoo
+
     return parser.parse_args()
 
 
@@ -221,13 +217,11 @@ def main():
 
     model.train()
     model.to(device)
-<<<<<<< HEAD
     if args.multi_gpu:
         model = nn.DataParallel(model)
-=======
     WarpModel.train()
     WarpModel.to(device)
->>>>>>> smyoo
+
 
     cudnn.benchmark = True
 
@@ -279,8 +273,8 @@ def main():
                 images = images.to(device)
                 labels = labels.long().to(device)
 
-                _, pred2 = model(images)
-                pred2 = interp(pred2)
+                warper, warp_list = WarpModel(images)
+                _, pred2 = model(images, input_size, warper)
 
                 loss_seg2 = seg_loss(pred2, labels)
                 loss = loss_seg2
@@ -333,7 +327,6 @@ def main():
 
             trainloader_iter = enumerate(trainloader)
 
-<<<<<<< HEAD
             targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                              max_iters=args.num_steps * args.iter_size * args.batch_size,
                                                              crop_size=input_size_target,
@@ -341,10 +334,8 @@ def main():
                                                              set=args.set),
                                            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                            pin_memory=True)
-=======
-            warper, warp_list = WarpModel(images)
-            pred1, pred2 = model(images, input_size, warper)
->>>>>>> smyoo
+
+
 
             targetloader_iter = enumerate(targetloader)
 
@@ -357,19 +348,13 @@ def main():
             optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
             optimizer_D2.zero_grad()
 
-<<<<<<< HEAD
+
             if args.gan == 'Vanilla':
                 bce_loss = torch.nn.BCEWithLogitsLoss()
             elif args.gan == 'LS':
                 bce_loss = torch.nn.MSELoss()
             seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
-=======
-            pred_target1, pred_target2 = model(images, input_size, warper)
->>>>>>> smyoo
 
-            interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
-            interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear',
-                                        align_corners=True)
 
             # labels for adversarial training
             source_label = 0
@@ -410,8 +395,8 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    _, pred2 = model(images)
-                    pred2 = interp(pred2)
+                    warper, warp_list = WarpModel(images)
+                    _, pred2 = model(images, input_size, warper)
 
                     loss_seg2 = seg_loss(pred2, labels)
                     loss = loss_seg2
@@ -427,8 +412,7 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    _, pred_target2 = model(images)
-                    pred_target2 = interp_target(pred_target2)
+                    _, pred_target2 = model(images, input_size, warper)
 
                     D_out2 = model_D2(F.softmax(pred_target2))
 
@@ -504,6 +488,7 @@ def main():
 
             if args.tensorboard:
                 writer.close()
+
         elif args.level == 'multi-level':
             # init D
             model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
@@ -554,9 +539,6 @@ def main():
                 bce_loss = torch.nn.MSELoss()
             seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
 
-            interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
-            interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear',
-                                        align_corners=True)
 
             # labels for adversarial training
             source_label = 0
@@ -607,8 +589,6 @@ def main():
                     labels = labels.long().to(device)
 
                     pred1, pred2 = model(images)
-                    pred1 = interp(pred1)
-                    pred2 = interp(pred2)
 
                     loss_seg1 = seg_loss(pred1, labels)
                     loss_seg2 = seg_loss(pred2, labels)
@@ -627,8 +607,6 @@ def main():
                     images = images.to(device)
 
                     pred_target1, pred_target2 = model(images)
-                    pred_target1 = interp_target(pred_target1)
-                    pred_target2 = interp_target(pred_target2)
 
                     D_out1 = model_D1(F.softmax(pred_target1))
                     D_out2 = model_D2(F.softmax(pred_target2))
