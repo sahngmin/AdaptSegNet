@@ -40,12 +40,9 @@ class GTA5DataSet(data.Dataset):
             })
 
     def __len__(self):
-<<<<<<< HEAD
-        return len(self.files)
-=======
         # return len(self.files)
         return 2499
->>>>>>> smyoo
+
 
 
     def __getitem__(self, index):

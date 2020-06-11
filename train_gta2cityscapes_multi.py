@@ -34,7 +34,7 @@ BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY =  '/home/smyoo/CAG_UDA/dataset/GTA5'
+DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
@@ -49,7 +49,9 @@ NUM_STEPS = 250000
 
 POWER = 0.9
 RANDOM_SEED = 1234
-RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+
+# RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+RESTORE_FROM = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 # RESTORE_FROM = './snapshots/source_only/GTA5_.pth'
 SAVE_NUM_IMAGES = 2
 
@@ -147,7 +149,7 @@ def get_arguments():
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
     parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
-    parser.add_argument("--multi-gpu", action='store_false')
+    parser.add_argument("--multi-gpu", action='store_false', default=False)
 
     parser.add_argument("--warper", default=True)
 
@@ -226,7 +228,6 @@ def main():
     cudnn.benchmark = True
 
     if SOURCE_ONLY:
-
         if not os.path.exists(osp.join(args.snapshot_dir, 'source_only')):
             os.makedirs(osp.join(args.snapshot_dir, 'source_only'))
 
