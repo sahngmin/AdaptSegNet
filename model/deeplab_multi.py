@@ -115,7 +115,7 @@ class Classifier_Module(nn.Module):
         out = self.conv2d_list[0](x)
         for i in range(len(self.conv2d_list) - 1):
             out += self.conv2d_list[i + 1](x)
-            return out
+        return out
 
 
 class ResNetMulti(nn.Module):
@@ -179,7 +179,6 @@ class ResNetMulti(nn.Module):
 
         x2 = self.layer4(x)
         x2 = self.layer6(x2)
-
         return x1, x2
 
     def get_1x_lr_params_NOscale(self):

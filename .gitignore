@@ -2,7 +2,7 @@
 *.pth
 *.png
 *.jpg
-*.txt
+#*.txt
 
 .idea/
 data/
