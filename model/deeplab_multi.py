@@ -128,7 +128,8 @@ class ResNetMulti(nn.Module):
         for i in self.bn1.parameters():
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)  # change
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)# change
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
@@ -173,7 +174,7 @@ class ResNetMulti(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-
+        
         x = self.layer3(x)
         x1 = self.layer5(x)
 
