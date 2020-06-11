@@ -14,7 +14,7 @@ import os
 import os.path as osp
 import random
 from tensorboardX import SummaryWriter
-
+from model.warper import Warper
 from model.deeplab_multi import DeeplabMulti
 from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
@@ -30,8 +30,8 @@ NUM_WORKERS = 1
 DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
-INPUT_SIZE = '1280,720'
-DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/Cityscapes'
+INPUT_SIZE = '1024,512'
+DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 LEARNING_RATE = 2.5e-4
@@ -138,6 +138,8 @@ def get_arguments():
                         help="choose adaptation set.")
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
+
+    parser.add_argument("--warper", default=True)
     return parser.parse_args()
 
 
@@ -193,8 +195,13 @@ def main():
                 # print i_parts
         model.load_state_dict(new_params)
 
+    if args.warper == True:
+        WarpModel = Warper()
+
     model.train()
     model.to(device)
+    WarpModel.train()
+    WarpModel.to(device)
 
     cudnn.benchmark = True
 
@@ -299,9 +306,8 @@ def main():
             images = images.to(device)
             labels = labels.long().to(device)
 
-            pred1, pred2 = model(images)
-            pred1 = interp(pred1)
-            pred2 = interp(pred2)
+            warper, warp_list = WarpModel(images)
+            pred1, pred2 = model(images, input_size, warper)
 
             loss_seg1 = seg_loss(pred1, labels)
             loss_seg2 = seg_loss(pred2, labels)
@@ -319,9 +325,7 @@ def main():
             images, _, _ = batch
             images = images.to(device)
 
-            pred_target1, pred_target2 = model(images)
-            pred_target1 = interp_target(pred_target1)
-            pred_target2 = interp_target(pred_target2)
+            pred_target1, pred_target2 = model(images, input_size, warper)
 
             D_out1 = model_D1(F.softmax(pred_target1))
             D_out2 = model_D2(F.softmax(pred_target2))

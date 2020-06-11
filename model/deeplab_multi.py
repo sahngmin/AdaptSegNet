@@ -3,6 +3,9 @@ import math
 import torch.utils.model_zoo as model_zoo
 import torch
 import numpy as np
+import torch.nn.functional as functional
+from torch.autograd import Variable
+
 
 affine_par = True
 
@@ -128,7 +131,7 @@ class ResNetMulti(nn.Module):
         for i in self.bn1.parameters():
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)  # change
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)  # change
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
@@ -166,7 +169,7 @@ class ResNetMulti(nn.Module):
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, input_size, warper):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -180,7 +183,13 @@ class ResNetMulti(nn.Module):
         x2 = self.layer4(x)
         x2 = self.layer6(x2)
 
-        return x1, x2
+        x1_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x1)
+        x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
+
+        x1_warped = self.warp(x1_up, warper)
+        x2_warped = self.warp(x2_up, warper)
+
+        return x1_warped, x2_warped
 
     def get_1x_lr_params_NOscale(self):
         """
@@ -224,7 +233,30 @@ class ResNetMulti(nn.Module):
                 {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
 
 
+    @staticmethod
+    def warp(input, warper):
+
+        xs = np.linspace(-1, 1, input.size(2))
+        xs = np.meshgrid(xs, xs)
+        xs = np.stack(xs, 2)
+        xs = torch.Tensor(xs).unsqueeze(0).repeat(input.size(0), 1, 1, 1)
+        if torch.cuda.is_available():
+            xs = xs.cuda()
+
+        sampled = torch.zeros(input.size()).cuda()
+        for i in range(warper.size(1) // 2):
+            sampler = nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs,
+                                                                                                 requires_grad=False)
+            sampler = sampler.clamp(min=-1, max=1)
+            sampled[:, i:i + 1, :, :] = functional.grid_sample(input[:, i:i + 1, :, :], sampler)
+
+        return sampled
+
+
 def DeeplabMulti(num_classes=21):
     model = ResNetMulti(Bottleneck, [3, 4, 23, 3], num_classes)
     return model
+
+
+
 
