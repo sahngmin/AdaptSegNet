@@ -6,6 +6,11 @@ import random
 from PIL import Image
 from os.path import join
 
+SOURCE_ONLY = True
+LEVEL = 'single-level'
+
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 150000  # early stopping
 
 def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
@@ -69,15 +74,20 @@ def main(args):
 
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
-        pred_dir = join(args.pred_dir, 'step' + str((files + 1) * args.save_pred_every))
+        if SOURCE_ONLY:
+            pred_dir = join(args.pred_dir, 'source_only', 'step' + str((files + 1) * args.save_pred_every))
+        else:
+            if args.level == 'single-level':
+                pred_dir = join(args.pred_dir, 'single_level', 'step' + str((files + 1) * args.save_pred_every))
+            elif args.level == 'multi-level':
+                pred_dir = join(args.pred_dir, 'multi-level', 'step' + str((files + 1) * args.save_pred_every))
+            else:
+                raise NotImplementedError('level choice {} is not implemented'.format(args.level))
         compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
     # compute_mIoU(args.gt_dir, args.pred_dir, args.devkit_dir)
 
 
 if __name__ == "__main__":
-    SAVE_PRED_EVERY = 5000
-    NUM_STEPS_STOP = 150000
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--gt_dir', type=str, default='/work/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
     parser.add_argument('--pred_dir', type=str, default='./result/cityscapes', help='directory which stores CityScapes val pred images')
@@ -87,6 +97,8 @@ if __name__ == "__main__":
                         help="Save summaries and checkpoint every often.")
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
+
+    parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
 
     args = parser.parse_args()
     main(args)

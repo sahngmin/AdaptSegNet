@@ -21,6 +21,12 @@ from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 
+SOURCE_ONLY = True
+LEVEL = 'single-level'
+
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 150000  # early stopping
+
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 MODEL = 'DeepLab'
@@ -38,12 +44,13 @@ LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 NUM_CLASSES = 19
 NUM_STEPS = 250000
-NUM_STEPS_STOP = 150000  # early stopping
+
 POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+# RESTORE_FROM = './snapshots/source_only/GTA5_.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 5000
+
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -52,7 +59,7 @@ LEARNING_RATE_D = 1e-4
 LAMBDA_SEG = 0.1
 LAMBDA_ADV_TARGET1 = 0.0002
 LAMBDA_ADV_TARGET2 = 0.001
-GAN = 'Vanilla'
+GAN = 'LS'
 
 TARGET = 'cityscapes'
 SET = 'train'
@@ -138,7 +145,8 @@ def get_arguments():
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
 
-    parser.add_argument("--source-only", action='store_false', help="train on source domain only")
+    parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
+    parser.add_argument("--multi-gpu", action='store_false')
     return parser.parse_args()
 
 
@@ -202,10 +210,12 @@ def main():
 
     model.train()
     model.to(device)
+    if args.multi_gpu:
+        model = nn.DataParallel(model)
 
     cudnn.benchmark = True
 
-    if args.source_only:
+    if SOURCE_ONLY:
 
         if not os.path.exists(osp.join(args.snapshot_dir, 'source_only')):
             os.makedirs(osp.join(args.snapshot_dir, 'source_only'))
@@ -290,231 +300,421 @@ def main():
         if args.tensorboard:
             writer.close()
     else:
-        # init D
-        model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
-        model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
+        if args.level == 'single-level':
+            # init D
+            model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
+            model_D2.train()
+            model_D2.to(device)
 
-        model_D1.train()
-        model_D1.to(device)
+            if not os.path.exists(osp.join(args.snapshot_dir, 'single_level')):
+                os.makedirs(osp.join(args.snapshot_dir, 'single_level'))
 
-        model_D2.train()
-        model_D2.to(device)
+            trainloader = data.DataLoader(
+                GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
+                            crop_size=input_size,
+                            scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
+                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
 
-        if not os.path.exists(args.snapshot_dir):
-            os.makedirs(args.snapshot_dir)
+            trainloader_iter = enumerate(trainloader)
 
-        trainloader = data.DataLoader(
-            GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
-                        crop_size=input_size,
-                        scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
-            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+                                                             max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                             crop_size=input_size_target,
+                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                             set=args.set),
+                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                           pin_memory=True)
 
-        trainloader_iter = enumerate(trainloader)
+            targetloader_iter = enumerate(targetloader)
 
-        targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                         max_iters=args.num_steps * args.iter_size * args.batch_size,
-                                                         crop_size=input_size_target,
-                                                         scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                         set=args.set),
-                                       batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                       pin_memory=True)
+            # implement model.optim_parameters(args) to handle different models' lr setting
 
-
-        targetloader_iter = enumerate(targetloader)
-
-        # implement model.optim_parameters(args) to handle different models' lr setting
-
-        optimizer = optim.SGD(model.optim_parameters(args),
-                              lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-        optimizer.zero_grad()
-
-        optimizer_D1 = optim.Adam(model_D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-        optimizer_D1.zero_grad()
-
-        optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-        optimizer_D2.zero_grad()
-
-        if args.gan == 'Vanilla':
-            bce_loss = torch.nn.BCEWithLogitsLoss()
-        elif args.gan == 'LS':
-            bce_loss = torch.nn.MSELoss()
-        seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
-
-        interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
-        interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear', align_corners=True)
-
-        # labels for adversarial training
-        source_label = 0
-        target_label = 1
-
-        # set up tensor board
-        if args.tensorboard:
-            if not os.path.exists(args.log_dir):
-                os.makedirs(args.log_dir)
-
-            writer = SummaryWriter(args.log_dir)
-
-        for i_iter in range(args.num_steps):
-
-            loss_seg_value1 = 0
-            loss_adv_target_value1 = 0
-            loss_D_value1 = 0
-
-            loss_seg_value2 = 0
-            loss_adv_target_value2 = 0
-            loss_D_value2 = 0
-
+            optimizer = optim.SGD(model.optim_parameters(args),
+                                  lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
             optimizer.zero_grad()
-            adjust_learning_rate(optimizer, i_iter)
 
-            optimizer_D1.zero_grad()
+            optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
             optimizer_D2.zero_grad()
-            adjust_learning_rate_D(optimizer_D1, i_iter)
-            adjust_learning_rate_D(optimizer_D2, i_iter)
 
-            for sub_i in range(args.iter_size):
+            if args.gan == 'Vanilla':
+                bce_loss = torch.nn.BCEWithLogitsLoss()
+            elif args.gan == 'LS':
+                bce_loss = torch.nn.MSELoss()
+            seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
 
-                # train G
+            interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
+            interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear',
+                                        align_corners=True)
 
-                # don't accumulate grads in D
-                for param in model_D1.parameters():
-                    param.requires_grad = False
+            # labels for adversarial training
+            source_label = 0
+            target_label = 1
 
-                for param in model_D2.parameters():
-                    param.requires_grad = False
+            # set up tensor board
+            if args.tensorboard:
+                if not os.path.exists(args.log_dir):
+                    os.makedirs(args.log_dir)
 
-                # train with source
+                writer = SummaryWriter(args.log_dir)
 
-                _, batch = trainloader_iter.__next__()
+            for i_iter in range(args.num_steps):
 
-                images, labels, _, _ = batch
-                images = images.to(device)
-                labels = labels.long().to(device)
+                loss_seg_value2 = 0
+                loss_adv_target_value2 = 0
+                loss_D_value2 = 0
 
-                pred1, pred2 = model(images)
-                pred1 = interp(pred1)
-                pred2 = interp(pred2)
+                optimizer.zero_grad()
+                adjust_learning_rate(optimizer, i_iter)
 
-                loss_seg1 = seg_loss(pred1, labels)
-                loss_seg2 = seg_loss(pred2, labels)
-                loss = loss_seg2 + args.lambda_seg * loss_seg1
+                optimizer_D2.zero_grad()
+                adjust_learning_rate_D(optimizer_D2, i_iter)
 
-                # proper normalization
-                loss = loss / args.iter_size
-                loss.backward()
-                loss_seg_value1 += loss_seg1.item() / args.iter_size
-                loss_seg_value2 += loss_seg2.item() / args.iter_size
+                for sub_i in range(args.iter_size):
 
-                # train with target
+                    # train G
 
-                _, batch = targetloader_iter.__next__()
-                images, _, _ = batch
-                images = images.to(device)
+                    # don't accumulate grads in D
+                    for param in model_D2.parameters():
+                        param.requires_grad = False
 
-                pred_target1, pred_target2 = model(images)
-                pred_target1 = interp_target(pred_target1)
-                pred_target2 = interp_target(pred_target2)
+                    # train with source
 
-                D_out1 = model_D1(F.softmax(pred_target1))
-                D_out2 = model_D2(F.softmax(pred_target2))
+                    _, batch = trainloader_iter.__next__()
 
-                loss_adv_target1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
+                    images, labels, _, _ = batch
+                    images = images.to(device)
+                    labels = labels.long().to(device)
 
-                loss_adv_target2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+                    _, pred2 = model(images)
+                    pred2 = interp(pred2)
 
-                loss = args.lambda_adv_target1 * loss_adv_target1 + args.lambda_adv_target2 * loss_adv_target2
-                loss = loss / args.iter_size
-                loss.backward()
-                loss_adv_target_value1 += loss_adv_target1.item() / args.iter_size
-                loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
+                    loss_seg2 = seg_loss(pred2, labels)
+                    loss = loss_seg2
 
-                # train D
+                    # proper normalization
+                    loss = loss / args.iter_size
+                    loss.backward()
+                    loss_seg_value2 += loss_seg2.item() / args.iter_size
 
-                # bring back requires_grad
-                for param in model_D1.parameters():
-                    param.requires_grad = True
+                    # train with target
 
-                for param in model_D2.parameters():
-                    param.requires_grad = True
+                    _, batch = targetloader_iter.__next__()
+                    images, _, _ = batch
+                    images = images.to(device)
 
-                # train with source
-                pred1 = pred1.detach()
-                pred2 = pred2.detach()
+                    _, pred_target2 = model(images)
+                    pred_target2 = interp_target(pred_target2)
 
-                D_out1 = model_D1(F.softmax(pred1))
-                D_out2 = model_D2(F.softmax(pred2))
+                    D_out2 = model_D2(F.softmax(pred_target2))
 
-                loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
+                    loss_adv_target2 = bce_loss(D_out2,
+                                                torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
 
-                loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+                    loss = args.lambda_adv_target2 * loss_adv_target2
+                    loss = loss / args.iter_size
+                    loss.backward()
+                    loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
 
-                loss_D1 = loss_D1 / args.iter_size / 2
-                loss_D2 = loss_D2 / args.iter_size / 2
+                    # train D
 
-                loss_D1.backward()
-                loss_D2.backward()
+                    # bring back requires_grad
+                    for param in model_D2.parameters():
+                        param.requires_grad = True
 
-                loss_D_value1 += loss_D1.item()
-                loss_D_value2 += loss_D2.item()
+                    # train with source
+                    pred2 = pred2.detach()
 
-                # train with target
-                pred_target1 = pred_target1.detach()
-                pred_target2 = pred_target2.detach()
+                    D_out2 = model_D2(F.softmax(pred2))
 
-                D_out1 = model_D1(F.softmax(pred_target1))
-                D_out2 = model_D2(F.softmax(pred_target2))
+                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+                    loss_D2 = loss_D2 / args.iter_size / 2
 
-                loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(target_label).to(device))
+                    loss_D2.backward()
 
-                loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(target_label).to(device))
+                    loss_D_value2 += loss_D2.item()
 
-                loss_D1 = loss_D1 / args.iter_size / 2
-                loss_D2 = loss_D2 / args.iter_size / 2
+                    # train with target
+                    pred_target2 = pred_target2.detach()
 
-                loss_D1.backward()
-                loss_D2.backward()
+                    D_out2 = model_D2(F.softmax(pred_target2))
 
-                loss_D_value1 += loss_D1.item()
-                loss_D_value2 += loss_D2.item()
+                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(target_label).to(device))
 
-            optimizer.step()
-            optimizer_D1.step()
-            optimizer_D2.step()
+                    loss_D2 = loss_D2 / args.iter_size / 2
+
+                    loss_D2.backward()
+                    loss_D_value2 += loss_D2.item()
+
+                optimizer.step()
+                optimizer_D2.step()
+
+                if args.tensorboard:
+                    scalar_info = {
+                        'loss_seg2': loss_seg_value2,
+                        'loss_adv_target2': loss_adv_target_value2,
+                        'loss_D2': loss_D_value2,
+                    }
+
+                    if i_iter % 10 == 0:
+                        for key, val in scalar_info.items():
+                            writer.add_scalar(key, val, i_iter)
+
+                print('exp = {}'.format(args.snapshot_dir))
+                print(
+                    'iter = {0:8d}/{1:8d}, loss_seg2 = {2:.3f} loss_adv2 = {3:.3f} loss_D2 = {4:.3f}'.format(
+                        i_iter, args.num_steps, loss_seg_value2, loss_adv_target_value2, loss_D_value2))
+
+                if i_iter >= args.num_steps_stop - 1:
+                    print('save model ...')
+                    torch.save(model.state_dict(),
+                               osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(args.num_steps_stop) + '.pth'))
+                    torch.save(model_D2.state_dict(),
+                               osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
+                    break
+
+                if i_iter % args.save_pred_every == 0 and i_iter != 0:
+                    print('taking snapshot ...')
+                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(i_iter) + '.pth'))
+                    torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(i_iter) + '_D2.pth'))
 
             if args.tensorboard:
-                scalar_info = {
-                    'loss_seg1': loss_seg_value1,
-                    'loss_seg2': loss_seg_value2,
-                    'loss_adv_target1': loss_adv_target_value1,
-                    'loss_adv_target2': loss_adv_target_value2,
-                    'loss_D1': loss_D_value1,
-                    'loss_D2': loss_D_value2,
-                }
+                writer.close()
+        elif args.level == 'multi-level':
+            # init D
+            model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
+            model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
 
-                if i_iter % 10 == 0:
-                    for key, val in scalar_info.items():
-                        writer.add_scalar(key, val, i_iter)
+            model_D1.train()
+            model_D1.to(device)
 
-            print('exp = {}'.format(args.snapshot_dir))
-            print(
-            'iter = {0:8d}/{1:8d}, loss_seg1 = {2:.3f} loss_seg2 = {3:.3f} loss_adv1 = {4:.3f}, loss_adv2 = {5:.3f} loss_D1 = {6:.3f} loss_D2 = {7:.3f}'.format(
-                i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2))
+            model_D2.train()
+            model_D2.to(device)
 
-            if i_iter >= args.num_steps_stop - 1:
-                print('save model ...')
-                torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
-                torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
-                break
+            if not os.path.exists(osp.join(args.snapshot_dir, 'multi_level')):
+                os.makedirs(osp.join(args.snapshot_dir, 'multi_level'))
 
-            if i_iter % args.save_pred_every == 0 and i_iter != 0:
-                print('taking snapshot ...')
-                torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
-                torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
-                torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D2.pth'))
+            trainloader = data.DataLoader(
+                GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
+                            crop_size=input_size,
+                            scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
+                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
 
-        if args.tensorboard:
-            writer.close()
+            trainloader_iter = enumerate(trainloader)
+
+            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+                                                             max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                             crop_size=input_size_target,
+                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                             set=args.set),
+                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                           pin_memory=True)
+
+            targetloader_iter = enumerate(targetloader)
+
+            # implement model.optim_parameters(args) to handle different models' lr setting
+
+            optimizer = optim.SGD(model.optim_parameters(args),
+                                  lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+            optimizer.zero_grad()
+
+            optimizer_D1 = optim.Adam(model_D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+            optimizer_D1.zero_grad()
+
+            optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+            optimizer_D2.zero_grad()
+
+            if args.gan == 'Vanilla':
+                bce_loss = torch.nn.BCEWithLogitsLoss()
+            elif args.gan == 'LS':
+                bce_loss = torch.nn.MSELoss()
+            seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
+
+            interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
+            interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear',
+                                        align_corners=True)
+
+            # labels for adversarial training
+            source_label = 0
+            target_label = 1
+
+            # set up tensor board
+            if args.tensorboard:
+                if not os.path.exists(args.log_dir):
+                    os.makedirs(args.log_dir)
+
+                writer = SummaryWriter(args.log_dir)
+
+            for i_iter in range(args.num_steps):
+
+                loss_seg_value1 = 0
+                loss_adv_target_value1 = 0
+                loss_D_value1 = 0
+
+                loss_seg_value2 = 0
+                loss_adv_target_value2 = 0
+                loss_D_value2 = 0
+
+                optimizer.zero_grad()
+                adjust_learning_rate(optimizer, i_iter)
+
+                optimizer_D1.zero_grad()
+                optimizer_D2.zero_grad()
+                adjust_learning_rate_D(optimizer_D1, i_iter)
+                adjust_learning_rate_D(optimizer_D2, i_iter)
+
+                for sub_i in range(args.iter_size):
+
+                    # train G
+
+                    # don't accumulate grads in D
+                    for param in model_D1.parameters():
+                        param.requires_grad = False
+
+                    for param in model_D2.parameters():
+                        param.requires_grad = False
+
+                    # train with source
+
+                    _, batch = trainloader_iter.__next__()
+
+                    images, labels, _, _ = batch
+                    images = images.to(device)
+                    labels = labels.long().to(device)
+
+                    pred1, pred2 = model(images)
+                    pred1 = interp(pred1)
+                    pred2 = interp(pred2)
+
+                    loss_seg1 = seg_loss(pred1, labels)
+                    loss_seg2 = seg_loss(pred2, labels)
+                    loss = loss_seg2 + args.lambda_seg * loss_seg1
+
+                    # proper normalization
+                    loss = loss / args.iter_size
+                    loss.backward()
+                    loss_seg_value1 += loss_seg1.item() / args.iter_size
+                    loss_seg_value2 += loss_seg2.item() / args.iter_size
+
+                    # train with target
+
+                    _, batch = targetloader_iter.__next__()
+                    images, _, _ = batch
+                    images = images.to(device)
+
+                    pred_target1, pred_target2 = model(images)
+                    pred_target1 = interp_target(pred_target1)
+                    pred_target2 = interp_target(pred_target2)
+
+                    D_out1 = model_D1(F.softmax(pred_target1))
+                    D_out2 = model_D2(F.softmax(pred_target2))
+
+                    loss_adv_target1 = bce_loss(D_out1,
+                                                torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
+
+                    loss_adv_target2 = bce_loss(D_out2,
+                                                torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+
+                    loss = args.lambda_adv_target1 * loss_adv_target1 + args.lambda_adv_target2 * loss_adv_target2
+                    loss = loss / args.iter_size
+                    loss.backward()
+                    loss_adv_target_value1 += loss_adv_target1.item() / args.iter_size
+                    loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
+
+                    # train D
+
+                    # bring back requires_grad
+                    for param in model_D1.parameters():
+                        param.requires_grad = True
+
+                    for param in model_D2.parameters():
+                        param.requires_grad = True
+
+                    # train with source
+                    pred1 = pred1.detach()
+                    pred2 = pred2.detach()
+
+                    D_out1 = model_D1(F.softmax(pred1))
+                    D_out2 = model_D2(F.softmax(pred2))
+
+                    loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
+
+                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+
+                    loss_D1 = loss_D1 / args.iter_size / 2
+                    loss_D2 = loss_D2 / args.iter_size / 2
+
+                    loss_D1.backward()
+                    loss_D2.backward()
+
+                    loss_D_value1 += loss_D1.item()
+                    loss_D_value2 += loss_D2.item()
+
+                    # train with target
+                    pred_target1 = pred_target1.detach()
+                    pred_target2 = pred_target2.detach()
+
+                    D_out1 = model_D1(F.softmax(pred_target1))
+                    D_out2 = model_D2(F.softmax(pred_target2))
+
+                    loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(target_label).to(device))
+
+                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(target_label).to(device))
+
+                    loss_D1 = loss_D1 / args.iter_size / 2
+                    loss_D2 = loss_D2 / args.iter_size / 2
+
+                    loss_D1.backward()
+                    loss_D2.backward()
+
+                    loss_D_value1 += loss_D1.item()
+                    loss_D_value2 += loss_D2.item()
+
+                optimizer.step()
+                optimizer_D1.step()
+                optimizer_D2.step()
+
+                if args.tensorboard:
+                    scalar_info = {
+                        'loss_seg1': loss_seg_value1,
+                        'loss_seg2': loss_seg_value2,
+                        'loss_adv_target1': loss_adv_target_value1,
+                        'loss_adv_target2': loss_adv_target_value2,
+                        'loss_D1': loss_D_value1,
+                        'loss_D2': loss_D_value2,
+                    }
+
+                    if i_iter % 10 == 0:
+                        for key, val in scalar_info.items():
+                            writer.add_scalar(key, val, i_iter)
+
+                print('exp = {}'.format(args.snapshot_dir))
+                print(
+                    'iter = {0:8d}/{1:8d}, loss_seg1 = {2:.3f} loss_seg2 = {3:.3f} loss_adv1 = {4:.3f}, loss_adv2 = {5:.3f} loss_D1 = {6:.3f} loss_D2 = {7:.3f}'.format(
+                        i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_adv_target_value1,
+                        loss_adv_target_value2, loss_D_value1, loss_D_value2))
+
+                if i_iter >= args.num_steps_stop - 1:
+                    print('save model ...')
+                    torch.save(model.state_dict(),
+                               osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(args.num_steps_stop) + '.pth'))
+                    torch.save(model_D1.state_dict(),
+                               osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
+                    torch.save(model_D2.state_dict(),
+                               osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
+                    break
+
+                if i_iter % args.save_pred_every == 0 and i_iter != 0:
+                    print('taking snapshot ...')
+                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(i_iter) + '.pth'))
+                    torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(i_iter) + '_D1.pth'))
+                    torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(i_iter) + '_D2.pth'))
+
+            if args.tensorboard:
+                writer.close()
+        else:
+            raise NotImplementedError('level choice {} is not implemented'.format(args.level))
+
+
 
 if __name__ == '__main__':
     main()

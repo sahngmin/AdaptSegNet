@@ -19,6 +19,13 @@ import os
 from PIL import Image
 
 import torch.nn as nn
+
+SOURCE_ONLY = True
+LEVEL = 'single-level'
+
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 150000  # early stopping
+
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = '/work/CityScapes'
@@ -28,9 +35,6 @@ SAVE_PATH = './result/cityscapes'
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
-
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000
 
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
 # RESTORE_FROM = './snapshots/GTA5_50.pth'
@@ -84,7 +88,8 @@ def get_arguments():
                         help="Save summaries and checkpoint every often.")
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
-    parser.add_argument("--source-only", action='store_false', help="train on source domain only")
+    parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
+    parser.add_argument("--multi-gpu", action='store_false')
     return parser.parse_args()
 
 
@@ -119,10 +124,15 @@ def main():
     #     saved_state_dict = torch.load(args.restore_from)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
-        if args.source_only:
+        if SOURCE_ONLY:
             saved_state_dict = torch.load('./snapshots/source_only/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
         else:
-            saved_state_dict = torch.load('./snapshots/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
+            if args.level == 'single-level':
+                saved_state_dict = torch.load('./snapshots/single_level/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
+            elif args.level == 'multi-level':
+                saved_state_dict = torch.load('./snapshots/multi_level/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
+            else:
+                raise NotImplementedError('level choice {} is not implemented'.format(args.level))
         ### for running different versions of pytorch
         model_dict = model.state_dict()
         saved_state_dict = {k: v for k, v in saved_state_dict.items() if k in model_dict}
@@ -132,6 +142,8 @@ def main():
 
         device = torch.device("cuda" if not args.cpu else "cpu")
         model = model.to(device)
+        if args.multi_gpu:
+            model = nn.DataParallel(model)
 
         model.eval()
 
@@ -160,12 +172,36 @@ def main():
             output = Image.fromarray(output)
 
             name = name[0].split('/')[-1]
-            if not os.path.exists(os.path.join(args.save, 'step' + str((files+1)*args.save_pred_every))):
-                os.makedirs(os.path.join(args.save, 'step' + str((files+1)*args.save_pred_every)))
-            output.save(os.path.join(args.save, 'step' + str((files+1)*args.save_pred_every), name))
-            # output.save('%s/%s' % (args.save, name))
-            output_col.save(os.path.join(args.save, 'step' + str((files+1)*args.save_pred_every), name.split('.')[0] + '_color.png'))
-            # output_col.save('%s/%s_color.png' % (args.save, name.split('.')[0]))
+            if SOURCE_ONLY:
+                if not os.path.exists(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every))):
+                    os.makedirs(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every)))
+                output.save(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every), name))
+                output_col.save(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every),
+                                             name.split('.')[0] + '_color.png'))
+            else:
+                if args.level == 'single-level':
+                    if not os.path.exists(
+                            os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every))):
+                        os.makedirs(
+                            os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every)))
+                    output.save(
+                        os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every), name))
+                    output_col.save(
+                        os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every),
+                                     name.split('.')[0] + '_color.png'))
+                elif args.level == 'multi-level':
+                    if not os.path.exists(
+                            os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every))):
+                        os.makedirs(
+                            os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every)))
+                    output.save(
+                        os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every), name))
+                    output_col.save(
+                        os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every),
+                                     name.split('.')[0] + '_color.png'))
+                else:
+                    raise NotImplementedError('level choice {} is not implemented'.format(args.level))
+
 
 
 if __name__ == '__main__':
