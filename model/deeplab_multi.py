@@ -238,8 +238,9 @@ class ResNetMulti(nn.Module):
     @staticmethod
     def warp(input, warper):
 
-        xs = np.linspace(-1, 1, input.size(2))
-        xs = np.meshgrid(xs, xs)
+        xs1 = np.linspace(-1, 1, input.size(2))
+        xs2 = np.linspace(-1, 1, input.size(3))
+        xs = np.meshgrid(xs2, xs1)
         xs = np.stack(xs, 2)
         xs = torch.Tensor(xs).unsqueeze(0).repeat(input.size(0), 1, 1, 1)
         if torch.cuda.is_available():
@@ -247,8 +248,7 @@ class ResNetMulti(nn.Module):
 
         sampled = torch.zeros(input.size()).cuda()
         for i in range(warper.size(1) // 2):
-            sampler = nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs,
-                                                                                                 requires_grad=False)
+            sampler = nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
             sampler = sampler.clamp(min=-1, max=1)
             sampled[:, i:i + 1, :, :] = functional.grid_sample(input[:, i:i + 1, :, :], sampler)
 

@@ -120,9 +120,9 @@ class SkipConnectionDecode(nn.Module):
         up_list.append(UpConvolution(1024, 256, self.use_bias, self.norm_layer, use_dropout, transpose))
         up_list.append(UpConvolution(512, 128, self.use_bias, self.norm_layer, use_dropout, transpose))
         up_list.append(UpConvolution(256, 64, self.use_bias, self.norm_layer, use_dropout, transpose))
-        up_list.append(UpConvolution(128, 32, self.use_bias, self.norm_layer, use_dropout, transpose))
+        # up_list.append(UpConvolution(128, 32, self.use_bias, self.norm_layer, use_dropout, transpose))
 
-        up_list.append(DecoderOutput(32, out_channel, transpose))
+        up_list.append(DecoderOutput(64, out_channel, transpose))
         self.up_list = nn.ModuleList(up_list)
         if self.use_advanced:
             self.advanced = AdvancedDecoderOutput(128, out_channel, self.use_bias, self.norm_layer)
@@ -231,7 +231,6 @@ class Warper(nn.Module):
                 init_type (str)    -- the name of our initialization method.
                 init_gain (float)  -- scaling factor for normal, xavier and orthogonal.
         """
-
 
         driving_num_layers = num_layers - 1
         self.connection = init_weights(Connection(num_layers - 2, warp_channels), init_type, init_gain)

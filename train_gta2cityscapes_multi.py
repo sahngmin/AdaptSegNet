@@ -224,16 +224,15 @@ def main():
     WarpModel.train()
     WarpModel.to(device)
 
-
     cudnn.benchmark = True
 
     if SOURCE_ONLY:
         if not os.path.exists(osp.join(args.snapshot_dir, 'source_only')):
             os.makedirs(osp.join(args.snapshot_dir, 'source_only'))
-
+        max_iters = None
+        # max_iters = args.num_steps * args.iter_size * args.batch_size
         trainloader = data.DataLoader(
-            GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
-                        crop_size=input_size,
+            GTA5DataSet(args.data_dir, args.data_list, max_iters=max_iters, crop_size=input_size,
                         scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
             batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
 
