@@ -171,7 +171,7 @@ class ResNetMulti(nn.Module):
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, x, input_size, warper):
+    def forward(self, x, input_size, warper=None):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -187,11 +187,11 @@ class ResNetMulti(nn.Module):
 
         x1_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x1)
         x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
+        if warper is not None:
+            x1_up = self.warp(x1_up, warper)
+            x2_up = self.warp(x2_up, warper)
 
-        x1_warped = self.warp(x1_up, warper)
-        x2_warped = self.warp(x2_up, warper)
-
-        return x1_warped, x2_warped
+        return x1_up, x2_up
 
     def get_1x_lr_params_NOscale(self):
         """
@@ -250,7 +250,7 @@ class ResNetMulti(nn.Module):
         for i in range(warper.size(1) // 2):
             sampler = nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
             sampler = sampler.clamp(min=-1, max=1)
-            sampled[:, i:i + 1, :, :] = functional.grid_sample(input[:, i:i + 1, :, :], sampler)
+        sampled = functional.grid_sample(input, sampler)
 
         return sampled
 
