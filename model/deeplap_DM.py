@@ -117,11 +117,28 @@ class Classifier_Module(nn.Module):
             out += self.conv2d_list[i + 1](x)
         return out
 
+class DM(nn.Module):
+    def __init__(self, inplanes, dilation_series, padding_series, num_classes):
+        super(DM, self).__init__()
+        self.conv2d_list = nn.ModuleList()
+        for dilation, padding in zip(dilation_series, padding_series):
+            self.conv2d_list.append(
+                nn.Conv2d(inplanes, num_classes, kernel_size=3, stride=1, padding=padding, dilation=dilation, bias=True))
 
-class ResNetMulti(nn.Module):
-    def __init__(self, block, layers, num_classes):
+        for m in self.conv2d_list:
+            m.weight.data.normal_(0, 0.01)
+
+    def forward(self, x):
+        out = self.conv2d_list[0](x)
+        for i in range(len(self.conv2d_list) - 1):
+            out += self.conv2d_list[i + 1](x)
+        return out
+
+
+class ResNet_DM(nn.Module):
+    def __init__(self, block, layers, num_classes, len_dataset):
         self.inplanes = 64
-        super(ResNetMulti, self).__init__()
+        super(ResNet_DM, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine=affine_par)
@@ -134,8 +151,10 @@ class ResNetMulti(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
-        self.layer5 = self._make_pred_layer(Classifier_Module, 1024, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
-        self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
+        self.ASPP = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
+        for num_dataset in range(len_dataset):
+            DM_name = 'DM' + str(num_dataset)
+            setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -167,22 +186,26 @@ class ResNetMulti(nn.Module):
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, args):
+        DM_name = 'DM' + str(args.num_dataset)
+
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-
         x = self.layer3(x)
-        x1 = self.layer5(x)
 
-        x2 = self.layer4(x)
-        x2 = self.layer6(x2)
-        return x1, x2
+        x1 = self.layer4(x)
+        x1 = self.ASPP(x1)
 
-    def get_1x_lr_params_NOscale(self):
+        x2 = torch.cat((x, x1), 0)
+        x2 = getattr(self, DM_name)(x2)
+
+        return x1 + x2
+
+    def ResNet_params(self):
         """
         This generator returns all the parameters of the net except for
         the last classification layer. Note that for each batchnorm layer,
@@ -206,25 +229,36 @@ class ResNetMulti(nn.Module):
                     if k.requires_grad:
                         yield k
 
-    def get_10x_lr_params(self):
+    def ASPP_params(self):
         """
         This generator returns all the parameters for the last layer of the net,
         which does the classification of pixel into classes
         """
         b = []
-        b.append(self.layer5.parameters())
-        b.append(self.layer6.parameters())
+        b.append(self.ASPP.parameters())
 
         for j in range(len(b)):
             for i in b[j]:
                 yield i
 
+    def DM_params(self, args):
+        DM_name = 'DM' + str(args.num_dataset)
+        b = []
+        b.append(getattr(self, DM_name).parameters())
+
+        for j in range(len(b)):
+            for i in b[j]:
+                yield i
+
+
+
     def optim_parameters(self, args):
-        return [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
-                {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
+        return [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
+                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
 
 
-def DeeplabMulti(num_classes=21):
-    model = ResNetMulti(Bottleneck, [3, 4, 23, 3], num_classes)
+def Deeplab_DM(num_classes, len_dataset):
+    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes, len_dataset)
     return model
 

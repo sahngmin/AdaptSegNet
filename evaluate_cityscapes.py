@@ -89,7 +89,7 @@ def get_arguments():
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
     parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
-    parser.add_argument("--multi-gpu", action='store_false')
+    parser.add_argument("--multi-gpu", action='store_true')
     return parser.parse_args()
 
 

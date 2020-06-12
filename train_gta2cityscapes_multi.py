@@ -16,6 +16,7 @@ import random
 from tensorboardX import SummaryWriter
 
 from model.deeplab_multi import DeeplabMulti
+from model.deeplap_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
@@ -26,6 +27,8 @@ LEVEL = 'single-level'
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
+
+dataset_dict = {'gta5': 0, 'synthia': 1, 'cityscapes': 2}
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -61,9 +64,10 @@ LAMBDA_ADV_TARGET1 = 0.0002
 LAMBDA_ADV_TARGET2 = 0.001
 GAN = 'LS'
 
-TARGET = 'cityscapes'
+TARGET = 'gta5'
 SET = 'train'
 
+NUM_DATASET = dataset_dict[TARGET]
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -146,7 +150,8 @@ def get_arguments():
                         help="choose the GAN objective.")
 
     parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
-    parser.add_argument("--multi-gpu", action='store_false')
+    parser.add_argument("--multi-gpu", action='store_true')
+    parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
     return parser.parse_args()
 
 
@@ -192,7 +197,7 @@ def main():
 
     # Create network
     if args.model == 'DeepLab':
-        model = DeeplabMulti(num_classes=args.num_classes)
+        model = Deeplab_DM(num_classes=args.num_classes, len_dataset=len(dataset_dict))
         if args.restore_from[:4] == 'http' :
             saved_state_dict = model_zoo.load_url(args.restore_from)
         else:
@@ -203,7 +208,7 @@ def main():
             # Scale.layer5.conv2d_list.3.weight
             i_parts = i.split('.')
             # print i_parts
-            if not args.num_classes == 19 or not i_parts[1] == 'layer5':
+            if not args.num_classes == 19 or not i_parts[1] == 'layer5' or not i_parts[1] == 'ASPP':
                 new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
                 # print i_parts
         model.load_state_dict(new_params)
