@@ -216,21 +216,22 @@ def main():
 
     if args.warper == True:
         WarpModel = Warper()
+        WarpModel.train()
+        WarpModel.to(device)
 
     model.train()
     model.to(device)
     if args.multi_gpu:
         model = nn.DataParallel(model)
-    WarpModel.train()
-    WarpModel.to(device)
+
 
     cudnn.benchmark = True
 
     if SOURCE_ONLY:
         if not os.path.exists(osp.join(args.snapshot_dir, 'source_only')):
             os.makedirs(osp.join(args.snapshot_dir, 'source_only'))
-        max_iters = None
-        # max_iters = args.num_steps * args.iter_size * args.batch_size
+        # max_iters = None
+        max_iters = args.num_steps * args.iter_size * args.batch_size
         trainloader = data.DataLoader(
             GTA5DataSet(args.data_dir, args.data_list, max_iters=max_iters, crop_size=input_size,
                         scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
@@ -273,7 +274,9 @@ def main():
                 images = images.to(device)
                 labels = labels.long().to(device)
 
-                warper, warp_list = WarpModel(images)
+                warper=None
+                if args.warper:
+                    warper, warp_list = WarpModel(images)
                 _, pred2 = model(images, input_size, warper)
 
                 loss_seg2 = seg_loss(pred2, labels)
@@ -395,7 +398,10 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    warper, warp_list = WarpModel(images)
+                    warper = None
+                    if args.warper:
+                        warper, warp_list = WarpModel(images)
+
                     _, pred2 = model(images, input_size, warper)
 
                     loss_seg2 = seg_loss(pred2, labels)
