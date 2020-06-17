@@ -10,9 +10,8 @@ from torch.autograd import Variable
 import torchvision.models as models
 import torch.nn.functional as F
 from torch.utils import data, model_zoo
-from model.deeplab import Res_Deeplab
-from model.deeplab_multi import DeeplabMulti
-from model.deeplab_vgg import DeeplabVGG
+from model.deeplab import Deeplab
+from model.deeplab_DM import Deeplab_DM
 from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
@@ -20,11 +19,16 @@ from PIL import Image
 
 import torch.nn as nn
 
-SOURCE_ONLY = True
-LEVEL = 'single-level'
+SOURCE_ONLY = False
+MEMORY = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS_STOP = 250000  # early stopping
+
+dataset_dict = {'cityscapes': 1, 'synthia': 2}
+TARGET = 'cityscapes'
+NUM_DATASET = dataset_dict[TARGET]
+INPUT_SIZE_TARGET = '1024,512'
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
@@ -36,13 +40,12 @@ IGNORE_LABEL = 255
 NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
 
-RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
-# RESTORE_FROM = './snapshots/GTA5_50.pth'
-RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
-RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
+RESTORE_FROM_SOURCE_ONLY = './snapshots/source_only/GTA5_best_model.pth'
+RESTORE_FROM_SINGLE_LEVEL = './snapshots/single_level/GTA5tocityscapes_best_model.pth'
+RESTORE_FROM_SINGLE_LEVEL_DM = './snapshots/single_level_DM/GTA5tocityscapes_best_model.pth'
 SET = 'val'
 
-MODEL = 'DeeplabMulti'
+RANDOM_SEED = 1338
 
 palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156, 190, 153, 153, 153, 153, 153, 250, 170, 30,
            220, 220, 0, 107, 142, 35, 152, 251, 152, 70, 130, 180, 220, 20, 60, 255, 0, 0, 0, 0, 142, 0, 0, 70,
@@ -53,7 +56,6 @@ for i in range(zero_pad):
 
 
 def colorize_mask(mask):
-    # mask: numpy array of the mask
     new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
     new_mask.putpalette(palette)
 
@@ -66,8 +68,10 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
-    parser.add_argument("--model", type=str, default=MODEL,
-                        help="Model Choice (DeeplabMulti/DeeplabVGG/Oracle).")
+    parser.add_argument("--target", type=str, default=TARGET,
+                        help="available options : cityscapes, synthia")
+    parser.add_argument("--input-size-target", type=str, default=INPUT_SIZE_TARGET,
+                        help="Comma-separated string with height and width of target images.")
     parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
                         help="Path to the directory containing the Cityscapes dataset.")
     parser.add_argument("--data-list", type=str, default=DATA_LIST_PATH,
@@ -76,7 +80,11 @@ def get_arguments():
                         help="The index of the label to ignore during the training.")
     parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
                         help="Number of classes to predict (including background).")
-    parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
+    parser.add_argument("--restore-from-source-only", type=str, default=RESTORE_FROM_SOURCE_ONLY,
+                        help="Where restore model parameters from.")
+    parser.add_argument("--restore-from-single-level", type=str, default=RESTORE_FROM_SINGLE_LEVEL,
+                        help="Where restore model parameters from.")
+    parser.add_argument("--restore-from-single-level-dm", type=str, default=RESTORE_FROM_SINGLE_LEVEL_DM,
                         help="Where restore model parameters from.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
@@ -88,69 +96,78 @@ def get_arguments():
                         help="Save summaries and checkpoint every often.")
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
-    parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
-    parser.add_argument("--multi-gpu", action='store_true')
+    parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
+                        help="Random seed to have reproducible results.")
+    parser.add_argument("--memory", action='store_true', default=MEMORY)
+    parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
     return parser.parse_args()
 
 
 def main():
-    seed = 1338
+    args = get_arguments()
+
+    seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
 
-    """Create the model and start the evaluation process."""
-
-    args = get_arguments()
+    w, h = map(int, args.input_size_target.split(','))
+    input_size_target = (w, h)
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
 
-    if args.model == 'DeeplabMulti':
-        model = DeeplabMulti(num_classes=args.num_classes)
-    elif args.model == 'Oracle':
-        model = Res_Deeplab(num_classes=args.num_classes)
-        if args.restore_from == RESTORE_FROM:
-            args.restore_from = RESTORE_FROM_ORC
-    elif args.model == 'DeeplabVGG':
-        model = DeeplabVGG(num_classes=args.num_classes)
-        if args.restore_from == RESTORE_FROM:
-            args.restore_from = RESTORE_FROM_VGG
-
-    # if args.restore_from[:4] == 'http' :
-    #     saved_state_dict = model_zoo.load_url(args.restore_from)
-    # else:
-    #     saved_state_dict = torch.load(args.restore_from)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
         if SOURCE_ONLY:
+            model = Deeplab(num_classes=args.num_classes)
             saved_state_dict = torch.load('./snapshots/source_only/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
+            new_params = model.state_dict().copy()
+            for i in saved_state_dict:
+                # layer5.conv2d_list.3.weight
+                i_parts = i.split('.')
+                if not i_parts[0] == 'layer5':
+                    new_params[i] = saved_state_dict[i]
+            model.load_state_dict(new_params)
         else:
-            if args.level == 'single-level':
-                saved_state_dict = torch.load('./snapshots/single_level/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
-            elif args.level == 'multi-level':
-                saved_state_dict = torch.load('./snapshots/multi_level/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
+            if not args.memory:
+                model = Deeplab(num_classes=args.num_classes)
+                saved_state_dict = torch.load('./snapshots/single_level/GTA5tocityscapes' + str((files + 1) * args.save_pred_every) + '.pth')
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict:
+                    # layer5.conv2d_list.3.weight
+                    i_parts = i.split('.')
+                    if not i_parts[0] == 'layer5':
+                        new_params[i] = saved_state_dict[i]
+                model.load_state_dict(new_params)
             else:
-                raise NotImplementedError('level choice {} is not implemented'.format(args.level))
-        ### for running different versions of pytorch
-        model_dict = model.state_dict()
-        saved_state_dict = {k: v for k, v in saved_state_dict.items() if k in model_dict}
-        model_dict.update(saved_state_dict)
-        ###
-        model.load_state_dict(saved_state_dict)
+                model = Deeplab_DM(num_classes=args.num_classes, len_dataset=args.num_dataset, args=args)
+                targetlist = list(dataset_dict.keys())
+                filename = 'GTA5to'
+                for i in range(args.num_dataset - 1):
+                    filename += targetlist[i]
+                    filename += 'to'
+                saved_state_dict = torch.load('./snapshots/single_level_DM/' + filename + str((files + 1) * args.save_pred_every) + '.pth')
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict:
+                    new_params[i] = saved_state_dict[i]
+                model.load_state_dict(new_params)
 
         device = torch.device("cuda" if not args.cpu else "cpu")
         model = model.to(device)
-        if args.multi_gpu:
-            model = nn.DataParallel(model)
 
         model.eval()
-
-        testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
-                                        batch_size=1, shuffle=False, pin_memory=True)
-
-        interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
+        if args.target == 'cityscapes':
+            testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
+                                            batch_size=1, shuffle=False, pin_memory=True)
+        elif args.target == 'synthia':  # SYNTHIA dataloader 필요!!!
+            testloader = data.DataLoader(
+                cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
+                                  mirror=False, set=args.set),
+                batch_size=1, shuffle=False, pin_memory=True)
+        else:
+            raise NotImplementedError('Unavailable target domain')
 
         for index, batch in enumerate(testloader):
             if index % 100 == 0:
@@ -158,12 +175,13 @@ def main():
             image, _, name = batch
             image = image.to(device)
 
-            if args.model == 'DeeplabMulti':
-                output1, output2 = model(image)
-                output = interp(output2).cpu().data[0].numpy()
-            elif args.model == 'DeeplabVGG' or args.model == 'Oracle':
-                output = model(image)
-                output = interp(output).cpu().data[0].numpy()
+            if SOURCE_ONLY:
+                output = model(image, input_size_target)
+            else:
+                if not args.memory:
+                    output = model(image, input_size_target)
+                else:
+                    output, _, _ = model(image, input_size_target, args)
 
             output = output.transpose(1,2,0)
             output = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
@@ -179,7 +197,7 @@ def main():
                 output_col.save(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every),
                                              name.split('.')[0] + '_color.png'))
             else:
-                if args.level == 'single-level':
+                if not args.memory:
                     if not os.path.exists(
                             os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every))):
                         os.makedirs(
@@ -189,19 +207,21 @@ def main():
                     output_col.save(
                         os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every),
                                      name.split('.')[0] + '_color.png'))
-                elif args.level == 'multi-level':
-                    if not os.path.exists(
-                            os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every))):
-                        os.makedirs(
-                            os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every)))
-                    output.save(
-                        os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every), name))
-                    output_col.save(
-                        os.path.join(args.save, 'multi_level', 'step' + str((files + 1) * args.save_pred_every),
-                                     name.split('.')[0] + '_color.png'))
                 else:
-                    raise NotImplementedError('level choice {} is not implemented'.format(args.level))
-
+                    targetlist = list(dataset_dict.keys())
+                    foldername = 'GTA5to'
+                    for i in range(args.num_dataset - 1):
+                        foldername += targetlist[i]
+                        foldername += 'to'
+                    if not os.path.exists(
+                            os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every))):
+                        os.makedirs(
+                            os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every)))
+                    output.save(
+                        os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every), name))
+                    output_col.save(
+                        os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every),
+                                     name.split('.')[0] + '_color.png'))
 
 
 if __name__ == '__main__':

@@ -14,21 +14,25 @@ import os
 import os.path as osp
 import random
 from tensorboardX import SummaryWriter
+import copy
 
-from model.deeplab_multi import DeeplabMulti
-from model.deeplap_DM import Deeplab_DM
+from model.deeplab_DM import Deeplab_DM
+from model.deeplab import Deeplab
 from model.discriminator import FCDiscriminator
-from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 
-SOURCE_ONLY = True
-LEVEL = 'single-level'
+SOURCE_ONLY = False
+MEMORY = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS_STOP = 250000  # early stopping
+NUM_STEPS = 250000
 
-dataset_dict = {'gta5': 0, 'synthia': 1, 'cityscapes': 2}
+dataset_dict = {'cityscapes': 1, 'synthia': 2}
+TARGET = 'cityscapes'
+SET = 'train'
+NUM_DATASET = dataset_dict[TARGET]
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -43,31 +47,33 @@ INPUT_SIZE = '1024,512'
 DATA_DIRECTORY_TARGET = '/work/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
+
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
-NUM_CLASSES = 19
-NUM_STEPS = 250000
-
+WEIGHT_DECAY = 0.0005
 POWER = 0.9
-RANDOM_SEED = 1234
-RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-# RESTORE_FROM = './snapshots/source_only/GTA5_.pth'
+
+NUM_CLASSES = 19
+
+RANDOM_SEED = 1338
+
+RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+RESTORE_FROM_DEEPLAB = './snapshots/source_only/GTA5_best_model.pth'
+RESTORE_FROM_PREVDOMAIN = './snapshots/single_level_DM/GTA5tocityscapes_best_model.pth'
+
 SAVE_NUM_IMAGES = 2
 
 SNAPSHOT_DIR = './snapshots/'
-WEIGHT_DECAY = 0.0005
+
 LOG_DIR = './log'
 
 LEARNING_RATE_D = 1e-4
-LAMBDA_SEG = 0.1
-LAMBDA_ADV_TARGET1 = 0.0002
-LAMBDA_ADV_TARGET2 = 0.001
+LAMBDA_ADV_TARGET = 0.001
 GAN = 'LS'
 
-TARGET = 'gta5'
-SET = 'train'
-
-NUM_DATASET = dataset_dict[TARGET]
+LAMBDA_DISTILLATION = 0.1
+LAMBDA_MEMORY = [1.2, 1.0]
+ALPHA = [0.25, 0.5]
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -79,7 +85,7 @@ def get_arguments():
     parser.add_argument("--model", type=str, default=MODEL,
                         help="available options : DeepLab")
     parser.add_argument("--target", type=str, default=TARGET,
-                        help="available options : cityscapes")
+                        help="available options : cityscapes, synthia")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
@@ -106,12 +112,11 @@ def get_arguments():
                         help="Base learning rate for training with polynomial decay.")
     parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
                         help="Base learning rate for discriminator.")
-    parser.add_argument("--lambda-seg", type=float, default=LAMBDA_SEG,
-                        help="lambda_seg.")
-    parser.add_argument("--lambda-adv-target1", type=float, default=LAMBDA_ADV_TARGET1,
+    parser.add_argument("--lambda-adv-target", type=float, default=LAMBDA_ADV_TARGET,
                         help="lambda_adv for adversarial training.")
-    parser.add_argument("--lambda-adv-target2", type=float, default=LAMBDA_ADV_TARGET2,
-                        help="lambda_adv for adversarial training.")
+    parser.add_argument("--lambda-memory", type=list, default=LAMBDA_MEMORY)
+    parser.add_argument("--lambda-distillation", type=float, default=LAMBDA_DISTILLATION)
+    parser.add_argument("--alpha", type=list, default=ALPHA)
     parser.add_argument("--momentum", type=float, default=MOMENTUM,
                         help="Momentum component of the optimiser.")
     parser.add_argument("--not-restore-last", action="store_true",
@@ -130,7 +135,11 @@ def get_arguments():
                         help="Whether to randomly scale the inputs during the training.")
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
-    parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
+    parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
+                        help="Where restore model parameters from.")
+    parser.add_argument("--restore-from-deeplab", type=str, default=RESTORE_FROM_DEEPLAB,
+                        help="Where restore model parameters from.")
+    parser.add_argument("--restore-from-prevdomain", type=str, default=RESTORE_FROM_PREVDOMAIN,
                         help="Where restore model parameters from.")
     parser.add_argument("--save-num-images", type=int, default=SAVE_NUM_IMAGES,
                         help="How many images to save.")
@@ -148,9 +157,7 @@ def get_arguments():
                         help="choose adaptation set.")
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
-
-    parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
-    parser.add_argument("--multi-gpu", action='store_true')
+    parser.add_argument("--memory", action='store_true', default=MEMORY)
     parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
     return parser.parse_args()
 
@@ -175,9 +182,15 @@ def adjust_learning_rate_D(optimizer, i_iter):
     if len(optimizer.param_groups) > 1:
         optimizer.param_groups[1]['lr'] = lr * 10
 
+def distillation_loss(pred_origin, old_outputs):
+    pred_origin_logsoftmax = pred_origin.log_softmax(dim=1)
+    old_outputs = old_outputs.softmax(dim=1)
+    loss_distillation = (-(old_outputs * pred_origin_logsoftmax)).sum(dim=1)
+    loss_distillation = loss_distillation.sum() / loss_distillation.flatten().shape[0]
+    return loss_distillation
 
 def main():
-    seed = 1338
+    seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
@@ -196,31 +209,25 @@ def main():
     cudnn.enabled = True
 
     # Create network
-    if args.model == 'DeepLab':
-        model = Deeplab_DM(num_classes=args.num_classes, len_dataset=len(dataset_dict))
-        if args.restore_from[:4] == 'http' :
-            saved_state_dict = model_zoo.load_url(args.restore_from)
+    if SOURCE_ONLY:  # training model from pre-trained ResNet on source domain(GTA5)
+        model = Deeplab(num_classes=args.num_classes)
+        if args.restore_from_resnet[:4] == 'http':
+            saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
         else:
-            saved_state_dict = torch.load(args.restore_from)
+            saved_state_dict = torch.load(args.restore_from_resnet)
 
         new_params = model.state_dict().copy()
         for i in saved_state_dict:
             # Scale.layer5.conv2d_list.3.weight
             i_parts = i.split('.')
-            # print i_parts
-            if not args.num_classes == 19 or not i_parts[1] == 'layer5' or not i_parts[1] == 'ASPP':
+            if not i_parts[1] == 'layer5':
                 new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                # print i_parts
         model.load_state_dict(new_params)
 
-    model.train()
-    model.to(device)
-    if args.multi_gpu:
-        model = nn.DataParallel(model)
+        model.train()
+        model.to(device)
 
-    cudnn.benchmark = True
-
-    if SOURCE_ONLY:
+        cudnn.benchmark = True
 
         if not os.path.exists(osp.join(args.snapshot_dir, 'source_only')):
             os.makedirs(osp.join(args.snapshot_dir, 'source_only'))
@@ -235,13 +242,11 @@ def main():
 
         # implement model.optim_parameters(args) to handle different models' lr setting
 
-        optimizer = optim.SGD(model.optim_parameters(args),
+        optimizer = optim.SGD(model.optim_parameters(args, SOURCE_ONLY),
                               lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
         optimizer.zero_grad()
 
         seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
-
-        interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
 
         # set up tensor board
         if args.tensorboard:
@@ -252,15 +257,14 @@ def main():
 
         for i_iter in range(args.num_steps):
 
-            loss_seg_value2 = 0
+            loss_seg_value = 0
 
             optimizer.zero_grad()
             adjust_learning_rate(optimizer, i_iter)
 
             for sub_i in range(args.iter_size):
 
-                # train G
-                # train with source
+                # train G with source
 
                 _, batch = trainloader_iter.__next__()
 
@@ -268,22 +272,21 @@ def main():
                 images = images.to(device)
                 labels = labels.long().to(device)
 
-                _, pred2 = model(images)
-                pred2 = interp(pred2)
+                pred = model(images, input_size)
 
-                loss_seg2 = seg_loss(pred2, labels)
-                loss = loss_seg2
+                loss_seg = seg_loss(pred, labels)
+                loss = loss_seg
 
                 # proper normalization
                 loss = loss / args.iter_size
                 loss.backward()
-                loss_seg_value2 += loss_seg2.item() / args.iter_size
+                loss_seg_value += loss_seg.item() / args.iter_size
 
             optimizer.step()
 
             if args.tensorboard:
                 scalar_info = {
-                    'loss_seg2': loss_seg_value2,
+                    'loss_seg': loss_seg_value
                     }
 
                 if i_iter % 10 == 0:
@@ -291,7 +294,7 @@ def main():
                         writer.add_scalar(key, val, i_iter)
 
             print('exp = {}'.format(args.snapshot_dir))
-            print("iter = {0:8d}/{1:8d}, loss_seg2 = {2:.3f}".format(i_iter, args.num_steps, loss_seg_value2))
+            print("iter = {0:8d}/{1:8d}, loss_seg2 = {2:.3f}".format(i_iter, args.num_steps, loss_seg_value))
 
             if i_iter >= args.num_steps_stop - 1:
                 print('save model ...')
@@ -305,11 +308,30 @@ def main():
         if args.tensorboard:
             writer.close()
     else:
-        if args.level == 'single-level':
+        if not args.memory:  # single-level alignment without DM
+            model = Deeplab(num_classes=args.num_classes)
+            if args.restore_from_deeplab[:4] == 'http':  # load model trained on source domain
+                saved_state_dict = model_zoo.load_url(args.restore_from_deeplab)
+            else:
+                saved_state_dict = torch.load(args.restore_from_deeplab)
+
+            new_params = model.state_dict().copy()
+            for i in saved_state_dict:
+                # layer5.conv2d_list.3.weight
+                i_parts = i.split('.')
+                if not i_parts[0] == 'layer5':
+                    new_params[i] = saved_state_dict[i]
+            model.load_state_dict(new_params)
+
+            model.train()
+            model.to(device)
+
+            cudnn.benchmark = True
+
             # init D
-            model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
-            model_D2.train()
-            model_D2.to(device)
+            model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+            model_D.train()
+            model_D.to(device)
 
             if not os.path.exists(osp.join(args.snapshot_dir, 'single_level')):
                 os.makedirs(osp.join(args.snapshot_dir, 'single_level'))
@@ -334,22 +356,18 @@ def main():
 
             # implement model.optim_parameters(args) to handle different models' lr setting
 
-            optimizer = optim.SGD(model.optim_parameters(args),
+            optimizer = optim.SGD(model.optim_parameters(args, SOURCE_ONLY),
                                   lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
             optimizer.zero_grad()
 
-            optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-            optimizer_D2.zero_grad()
+            optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+            optimizer_D.zero_grad()
 
             if args.gan == 'Vanilla':
                 bce_loss = torch.nn.BCEWithLogitsLoss()
             elif args.gan == 'LS':
                 bce_loss = torch.nn.MSELoss()
             seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
-
-            interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
-            interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear',
-                                        align_corners=True)
 
             # labels for adversarial training
             source_label = 0
@@ -364,22 +382,22 @@ def main():
 
             for i_iter in range(args.num_steps):
 
-                loss_seg_value2 = 0
-                loss_adv_target_value2 = 0
-                loss_D_value2 = 0
+                loss_seg_value = 0
+                loss_adv_target_value = 0
+                loss_D_value = 0
 
                 optimizer.zero_grad()
                 adjust_learning_rate(optimizer, i_iter)
 
-                optimizer_D2.zero_grad()
-                adjust_learning_rate_D(optimizer_D2, i_iter)
+                optimizer_D.zero_grad()
+                adjust_learning_rate_D(optimizer_D, i_iter)
 
                 for sub_i in range(args.iter_size):
 
                     # train G
 
                     # don't accumulate grads in D
-                    for param in model_D2.parameters():
+                    for param in model_D.parameters():
                         param.requires_grad = False
 
                     # train with source
@@ -390,16 +408,15 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    _, pred2 = model(images)
-                    pred2 = interp(pred2)
+                    pred = model(images, input_size)
 
-                    loss_seg2 = seg_loss(pred2, labels)
-                    loss = loss_seg2
+                    loss_seg = seg_loss(pred, labels)
+                    loss = loss_seg
 
                     # proper normalization
                     loss = loss / args.iter_size
                     loss.backward()
-                    loss_seg_value2 += loss_seg2.item() / args.iter_size
+                    loss_seg_value += loss_seg.item() / args.iter_size
 
                     # train with target
 
@@ -407,57 +424,56 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    _, pred_target2 = model(images)
-                    pred_target2 = interp_target(pred_target2)
+                    pred_target = model(images, input_size_target)
 
-                    D_out2 = model_D2(F.softmax(pred_target2))
+                    D_out = model_D(F.softmax(pred_target))
 
-                    loss_adv_target2 = bce_loss(D_out2,
-                                                torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+                    loss_adv_target = bce_loss(D_out,
+                                                torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
-                    loss = args.lambda_adv_target2 * loss_adv_target2
+                    loss = args.lambda_adv_target * loss_adv_target
                     loss = loss / args.iter_size
                     loss.backward()
-                    loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
+                    loss_adv_target_value += loss_adv_target.item() / args.iter_size
 
                     # train D
 
                     # bring back requires_grad
-                    for param in model_D2.parameters():
+                    for param in model_D.parameters():
                         param.requires_grad = True
 
                     # train with source
-                    pred2 = pred2.detach()
+                    pred = pred.detach()
 
-                    D_out2 = model_D2(F.softmax(pred2))
+                    D_out = model_D(F.softmax(pred))
 
-                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
-                    loss_D2 = loss_D2 / args.iter_size / 2
+                    loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                    loss_D = loss_D / args.iter_size / 2
 
-                    loss_D2.backward()
+                    loss_D.backward()
 
-                    loss_D_value2 += loss_D2.item()
+                    loss_D_value += loss_D.item()
 
                     # train with target
-                    pred_target2 = pred_target2.detach()
+                    pred_target = pred_target.detach()
 
-                    D_out2 = model_D2(F.softmax(pred_target2))
+                    D_out = model_D(F.softmax(pred_target))
 
-                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(target_label).to(device))
+                    loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
 
-                    loss_D2 = loss_D2 / args.iter_size / 2
+                    loss_D = loss_D / args.iter_size / 2
 
-                    loss_D2.backward()
-                    loss_D_value2 += loss_D2.item()
+                    loss_D.backward()
+                    loss_D_value += loss_D.item()
 
                 optimizer.step()
-                optimizer_D2.step()
+                optimizer_D.step()
 
                 if args.tensorboard:
                     scalar_info = {
-                        'loss_seg2': loss_seg_value2,
-                        'loss_adv_target2': loss_adv_target_value2,
-                        'loss_D2': loss_D_value2,
+                        'loss_seg': loss_seg_value,
+                        'loss_adv_target': loss_adv_target_value,
+                        'loss_D': loss_D_value
                     }
 
                     if i_iter % 10 == 0:
@@ -466,37 +482,62 @@ def main():
 
                 print('exp = {}'.format(args.snapshot_dir))
                 print(
-                    'iter = {0:8d}/{1:8d}, loss_seg2 = {2:.3f} loss_adv2 = {3:.3f} loss_D2 = {4:.3f}'.format(
-                        i_iter, args.num_steps, loss_seg_value2, loss_adv_target_value2, loss_D_value2))
+                    'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_adv = {3:.3f} loss_D = {4:.3f}'.format(
+                        i_iter, args.num_steps, loss_seg_value, loss_adv_target_value, loss_D_value))
 
                 if i_iter >= args.num_steps_stop - 1:
                     print('save model ...')
                     torch.save(model.state_dict(),
-                               osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                    torch.save(model_D2.state_dict(),
-                               osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
+                               osp.join(args.snapshot_dir, 'single_level', 'GTA5to' + str(args.target) + str(args.num_steps_stop) + '.pth'))
+                    torch.save(model_D.state_dict(),
+                               osp.join(args.snapshot_dir, 'single_level', 'GTA5to' + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
                     break
 
                 if i_iter % args.save_pred_every == 0 and i_iter != 0:
                     print('taking snapshot ...')
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(i_iter) + '.pth'))
-                    torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'single_level', 'GTA5_' + str(i_iter) + '_D2.pth'))
+                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'single_level', 'GTA5to' + str(args.target) + str(i_iter) + '.pth'))
+                    torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'single_level', 'GTA5to' + str(args.target) + str(i_iter) + '_D.pth'))
 
             if args.tensorboard:
                 writer.close()
-        elif args.level == 'multi-level':
+
+        else:  # single-level alignment with DM
+            model = Deeplab_DM(num_classes=args.num_classes, len_dataset=args.num_dataset, args=args)
+
+            if args.num_dataset == 1:  # first domain
+                saved_state_dict = torch.load(args.restore_from_deeplab)
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict:
+                    # layer5.conv2d_list.3.weight
+                    i_parts = i.split('.')
+                    if not i_parts[0] == 'layer5':
+                        new_params[i] = saved_state_dict[i]
+                model.load_state_dict(new_params)
+
+            else:  # after first domain
+                saved_state_dict = torch.load(args.restore_from_prevdomain)
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict:
+                    # load conv1, bn1, relu, maxpool, layer1,2,3,4,6 and DM, scale for previous tasks
+                    new_params[i] = saved_state_dict[i]
+                model.load_state_dict(new_params)
+
+            model.train()
+            model.to(device)
+
+            ref_model = copy.deepcopy(model)  # reference model for distillation loss
+            for params in ref_model.parameters():
+                params.requires_grad = False
+
+            cudnn.benchmark = True
+
             # init D
-            model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
-            model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
+            model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+            model_D.train()
+            model_D.to(device)
 
-            model_D1.train()
-            model_D1.to(device)
-
-            model_D2.train()
-            model_D2.to(device)
-
-            if not os.path.exists(osp.join(args.snapshot_dir, 'multi_level')):
-                os.makedirs(osp.join(args.snapshot_dir, 'multi_level'))
+            if not os.path.exists(osp.join(args.snapshot_dir, 'single_level_DM')):
+                os.makedirs(osp.join(args.snapshot_dir, 'single_level_DM'))
 
             trainloader = data.DataLoader(
                 GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.iter_size * args.batch_size,
@@ -506,13 +547,24 @@ def main():
 
             trainloader_iter = enumerate(trainloader)
 
-            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.iter_size * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                             set=args.set),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
+            if args.target == 'cityscapes':
+                targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+                                                                 max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                                 crop_size=input_size_target,
+                                                                 scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                                 set=args.set),
+                                               batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                               pin_memory=True)
+            elif args.target == 'synthia':  # SYNTHIA dataloader 필요!!!
+                targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+                                                                 max_iters=args.num_steps * args.iter_size * args.batch_size,
+                                                                 crop_size=input_size_target,
+                                                                 scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                                 set=args.set),
+                                               batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                               pin_memory=True)
+            else:
+                raise NotImplementedError('Unavailable target domain')
 
             targetloader_iter = enumerate(targetloader)
 
@@ -522,21 +574,14 @@ def main():
                                   lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
             optimizer.zero_grad()
 
-            optimizer_D1 = optim.Adam(model_D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-            optimizer_D1.zero_grad()
-
-            optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-            optimizer_D2.zero_grad()
+            optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+            optimizer_D.zero_grad()
 
             if args.gan == 'Vanilla':
                 bce_loss = torch.nn.BCEWithLogitsLoss()
             elif args.gan == 'LS':
                 bce_loss = torch.nn.MSELoss()
             seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
-
-            interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
-            interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear',
-                                        align_corners=True)
 
             # labels for adversarial training
             source_label = 0
@@ -551,31 +596,24 @@ def main():
 
             for i_iter in range(args.num_steps):
 
-                loss_seg_value1 = 0
-                loss_adv_target_value1 = 0
-                loss_D_value1 = 0
-
-                loss_seg_value2 = 0
-                loss_adv_target_value2 = 0
-                loss_D_value2 = 0
+                loss_seg_value = 0
+                loss_memory_value = 0
+                loss_distillation_value = 0
+                loss_adv_target_value = 0
+                loss_D_value = 0
 
                 optimizer.zero_grad()
                 adjust_learning_rate(optimizer, i_iter)
 
-                optimizer_D1.zero_grad()
-                optimizer_D2.zero_grad()
-                adjust_learning_rate_D(optimizer_D1, i_iter)
-                adjust_learning_rate_D(optimizer_D2, i_iter)
+                optimizer_D.zero_grad()
+                adjust_learning_rate_D(optimizer_D, i_iter)
 
                 for sub_i in range(args.iter_size):
 
                     # train G
 
                     # don't accumulate grads in D
-                    for param in model_D1.parameters():
-                        param.requires_grad = False
-
-                    for param in model_D2.parameters():
+                    for param in model_D.parameters():
                         param.requires_grad = False
 
                     # train with source
@@ -586,19 +624,19 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    pred1, pred2 = model(images)
-                    pred1 = interp(pred1)
-                    pred2 = interp(pred2)
+                    pred_both, pred_origin, pred_DM = model(images, input_size, args)
+                    _, old_outputs, _ = ref_model(images, input_size, args)
 
-                    loss_seg1 = seg_loss(pred1, labels)
-                    loss_seg2 = seg_loss(pred2, labels)
-                    loss = loss_seg2 + args.lambda_seg * loss_seg1
+                    loss_seg = seg_loss(pred_both, labels)
+                    loss_distillation = distillation_loss(pred_origin, old_outputs)
+                    loss_memory = seg_loss(pred_DM, labels)
 
-                    # proper normalization
+                    loss = loss_seg + args.lambda_distillation * loss_distillation + args.lambda_memory[args.num_dataset - 1] * loss_memory
                     loss = loss / args.iter_size
                     loss.backward()
-                    loss_seg_value1 += loss_seg1.item() / args.iter_size
-                    loss_seg_value2 += loss_seg2.item() / args.iter_size
+                    loss_seg_value += loss_seg.item() / args.iter_size
+                    loss_distillation_value += loss_distillation.item() / args.iter_size
+                    loss_memory_value += loss_memory.item() / args.iter_size
 
                     # train with target
 
@@ -606,86 +644,58 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    pred_target1, pred_target2 = model(images)
-                    pred_target1 = interp_target(pred_target1)
-                    pred_target2 = interp_target(pred_target2)
+                    pred_target, _, _ = model(images, input_size_target, args)
 
-                    D_out1 = model_D1(F.softmax(pred_target1))
-                    D_out2 = model_D2(F.softmax(pred_target2))
+                    D_out = model_D(F.softmax(pred_target))
 
-                    loss_adv_target1 = bce_loss(D_out1,
-                                                torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
+                    loss_adv_target = bce_loss(D_out,
+                                               torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
-                    loss_adv_target2 = bce_loss(D_out2,
-                                                torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
-
-                    loss = args.lambda_adv_target1 * loss_adv_target1 + args.lambda_adv_target2 * loss_adv_target2
+                    loss = args.lambda_adv_target * loss_adv_target
                     loss = loss / args.iter_size
                     loss.backward()
-                    loss_adv_target_value1 += loss_adv_target1.item() / args.iter_size
-                    loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
+                    loss_adv_target_value += loss_adv_target.item() / args.iter_size
 
                     # train D
 
                     # bring back requires_grad
-                    for param in model_D1.parameters():
-                        param.requires_grad = True
-
-                    for param in model_D2.parameters():
+                    for param in model_D.parameters():
                         param.requires_grad = True
 
                     # train with source
-                    pred1 = pred1.detach()
-                    pred2 = pred2.detach()
+                    pred = pred_both.detach()
 
-                    D_out1 = model_D1(F.softmax(pred1))
-                    D_out2 = model_D2(F.softmax(pred2))
+                    D_out = model_D(F.softmax(pred))
 
-                    loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
+                    loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                    loss_D = loss_D / args.iter_size / 2
 
-                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
+                    loss_D.backward()
 
-                    loss_D1 = loss_D1 / args.iter_size / 2
-                    loss_D2 = loss_D2 / args.iter_size / 2
-
-                    loss_D1.backward()
-                    loss_D2.backward()
-
-                    loss_D_value1 += loss_D1.item()
-                    loss_D_value2 += loss_D2.item()
+                    loss_D_value += loss_D.item()
 
                     # train with target
-                    pred_target1 = pred_target1.detach()
-                    pred_target2 = pred_target2.detach()
+                    pred_target = pred_target.detach()
 
-                    D_out1 = model_D1(F.softmax(pred_target1))
-                    D_out2 = model_D2(F.softmax(pred_target2))
+                    D_out = model_D(F.softmax(pred_target))
 
-                    loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(target_label).to(device))
+                    loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
 
-                    loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(target_label).to(device))
+                    loss_D = loss_D / args.iter_size / 2
 
-                    loss_D1 = loss_D1 / args.iter_size / 2
-                    loss_D2 = loss_D2 / args.iter_size / 2
-
-                    loss_D1.backward()
-                    loss_D2.backward()
-
-                    loss_D_value1 += loss_D1.item()
-                    loss_D_value2 += loss_D2.item()
+                    loss_D.backward()
+                    loss_D_value += loss_D.item()
 
                 optimizer.step()
-                optimizer_D1.step()
-                optimizer_D2.step()
+                optimizer_D.step()
 
                 if args.tensorboard:
                     scalar_info = {
-                        'loss_seg1': loss_seg_value1,
-                        'loss_seg2': loss_seg_value2,
-                        'loss_adv_target1': loss_adv_target_value1,
-                        'loss_adv_target2': loss_adv_target_value2,
-                        'loss_D1': loss_D_value1,
-                        'loss_D2': loss_D_value2,
+                        'loss_seg': loss_seg_value,
+                        'loss_distillation': loss_distillation_value,
+                        'loss_memory': loss_memory_value,
+                        'loss_adv_target': loss_adv_target_value,
+                        'loss_D': loss_D_value
                     }
 
                     if i_iter % 10 == 0:
@@ -694,31 +704,51 @@ def main():
 
                 print('exp = {}'.format(args.snapshot_dir))
                 print(
-                    'iter = {0:8d}/{1:8d}, loss_seg1 = {2:.3f} loss_seg2 = {3:.3f} loss_adv1 = {4:.3f}, loss_adv2 = {5:.3f} loss_D1 = {6:.3f} loss_D2 = {7:.3f}'.format(
-                        i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_adv_target_value1,
-                        loss_adv_target_value2, loss_D_value1, loss_D_value2))
+                    'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_distill = {3:.3f} loss_memory = {4:.3f} loss_adv = {5:.3f} loss_D = {6:.3f}'.format(
+                        i_iter, args.num_steps, loss_seg_value, loss_distillation_value, loss_memory_value, loss_adv_target_value, loss_D_value))
 
-                if i_iter >= args.num_steps_stop - 1:
-                    print('save model ...')
-                    torch.save(model.state_dict(),
-                               osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                    torch.save(model_D1.state_dict(),
-                               osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
-                    torch.save(model_D2.state_dict(),
-                               osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
-                    break
+                if args.num_dataset == 1:
+                    if i_iter >= args.num_steps_stop - 1:
+                        print('save model ...')
+                        torch.save(model.state_dict(),
+                                   osp.join(args.snapshot_dir, 'single_level_DM',
+                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '.pth'))
+                        torch.save(model_D.state_dict(),
+                                   osp.join(args.snapshot_dir, 'single_level_DM',
+                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
+                        break
 
-                if i_iter % args.save_pred_every == 0 and i_iter != 0:
-                    print('taking snapshot ...')
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(i_iter) + '.pth'))
-                    torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(i_iter) + '_D1.pth'))
-                    torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'multi_level', 'GTA5_' + str(i_iter) + '_D2.pth'))
+                    if i_iter % args.save_pred_every == 0 and i_iter != 0:
+                        print('taking snapshot ...')
+                        torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'single_level_DM',
+                                                                'GTA5to' + str(args.target) + str(i_iter) + '.pth'))
+                        torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'single_level_DM',
+                                                                  'GTA5to' + str(args.target) + str(i_iter) + '_D.pth'))
+                else:
+                    targetlist = list(dataset_dict.keys())
+                    filename = 'GTA5to'
+                    for i in range(args.num_dataset - 1):
+                        filename += targetlist[i]
+                        filename += 'to'
+                    if i_iter >= args.num_steps_stop - 1:
+                        print('save model ...')
+                        torch.save(model.state_dict(),
+                                   osp.join(args.snapshot_dir, 'single_level_DM',
+                                            filename + str(args.target) + str(args.num_steps_stop) + '.pth'))
+                        torch.save(model_D.state_dict(),
+                                   osp.join(args.snapshot_dir, 'single_level_DM',
+                                            filename + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
+                        break
+
+                    if i_iter % args.save_pred_every == 0 and i_iter != 0:
+                        print('taking snapshot ...')
+                        torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'single_level_DM',
+                                                                filename + str(args.target) + str(i_iter) + '.pth'))
+                        torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'single_level_DM',
+                                                                  filename + str(args.target) + str(i_iter) + '_D.pth'))
 
             if args.tensorboard:
                 writer.close()
-        else:
-            raise NotImplementedError('level choice {} is not implemented'.format(args.level))
-
 
 
 if __name__ == '__main__':

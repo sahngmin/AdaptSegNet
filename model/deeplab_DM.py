@@ -3,6 +3,9 @@ import math
 import torch.utils.model_zoo as model_zoo
 import torch
 import numpy as np
+from collections import OrderedDict
+import operator
+from itertools import islice
 
 affine_par = True
 
@@ -20,6 +23,58 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
+class Multioutput_Sequential(nn.Module):
+    def __init__(self, *args):
+        super(Multioutput_Sequential, self).__init__()
+        if len(args) == 1 and isinstance(args[0], OrderedDict):
+            for key, module in args[0].items():
+                self.add_module(key, module)
+        else:
+            for idx, module in enumerate(args):
+                self.add_module(str(idx), module)
+
+    def _get_item_by_idx(self, iterator, idx):
+        """Get the idx-th item of the iterator"""
+        size = len(self)
+        idx = operator.index(idx)
+        if not -size <= idx < size:
+            raise IndexError('index {} is out of range'.format(idx))
+        idx %= size
+        return next(islice(iterator, idx, None))
+
+    def __getitem__(self, idx):
+        if isinstance(idx, slice):
+            return self.__class__(OrderedDict(list(self._modules.items())[idx]))
+        else:
+            return self._get_item_by_idx(self._modules.values(), idx)
+
+    def __setitem__(self, idx, module):
+        key = self._get_item_by_idx(self._modules.keys(), idx)
+        return setattr(self, key, module)
+
+    def __delitem__(self, idx):
+        if isinstance(idx, slice):
+            for key in list(self._modules.keys())[idx]:
+                delattr(self, key)
+        else:
+            key = self._get_item_by_idx(self._modules.keys(), idx)
+            delattr(self, key)
+
+    def __len__(self):
+        return len(self._modules)
+
+    def __dir__(self):
+        keys = super(Multioutput_Sequential, self).__dir__()
+        keys = [key for key in keys if not key.isdigit()]
+        return keys
+
+    def __iter__(self):
+        return iter(self._modules.values())
+
+    def forward(self, input):
+        for module in self:
+            input = module(input[0])
+        return input
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -95,9 +150,9 @@ class Bottleneck(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        out = self.relu(out)
+        nonlinear_out = self.relu(out)
 
-        return out
+        return [nonlinear_out, out]
 
 
 class Classifier_Module(nn.Module):
@@ -136,7 +191,7 @@ class DM(nn.Module):
 
 
 class ResNet_DM(nn.Module):
-    def __init__(self, block, layers, num_classes, len_dataset):
+    def __init__(self, block, layers, num_classes, len_dataset, args):
         self.inplanes = 64
         super(ResNet_DM, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -146,15 +201,19 @@ class ResNet_DM(nn.Module):
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)# change
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
-        self.ASPP = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
+        self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
+
+        scale = torch.randn(2048 + 3072).fill_(6000)
+        scale[:2048] *= args.alpha[len_dataset - 1]
         for num_dataset in range(len_dataset):
-            DM_name = 'DM' + str(num_dataset)
+            DM_name = 'DM' + str(num_dataset + 1)
+            scale_name = 'scale' + str(num_dataset + 1)
             setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
+            setattr(self, scale_name, nn.Parameter(scale.cuda(), requires_grad=True))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -163,8 +222,6 @@ class ResNet_DM(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-                #        for i in m.parameters():
-                #            i.requires_grad = False
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
         downsample = None
@@ -181,29 +238,44 @@ class ResNet_DM(nn.Module):
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, dilation=dilation))
 
-        return nn.Sequential(*layers)
+        return Multioutput_Sequential(*layers)
 
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, x, args):
+    def forward(self, x, input_size, args):
         DM_name = 'DM' + str(args.num_dataset)
+        scale_name = 'scale' + str(args.num_dataset)
 
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        x = self.layer1(x)
+        x = self.layer1([x])
         x = self.layer2(x)
         x = self.layer3(x)
 
         x1 = self.layer4(x)
-        x1 = self.ASPP(x1)
+        ### normalizing and scaling
+        # print(torch.norm(x1[0], p=2, dim=[1,2,3]))
+        x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3]))
+        x1[0] = getattr(self, scale_name)[:2048].reshape(1, 2048, 1, 1) * x1[0]
 
-        x2 = torch.cat((x, x1), 0)
-        x2 = getattr(self, DM_name)(x2)
+        x2 = self.layer6(x1[0])
+        x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
-        return x1 + x2
+        x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
+        ### normalizing and scaling
+        # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
+        x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3]))
+        x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
+
+        x3 = getattr(self, DM_name)(x3)
+        x3_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x3)  # ResNet + DM
+
+        x_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2 + x3)  # ResNet + (DM+ASPP)
+
+        return x_up, x2_up, x3_up
 
     def ResNet_params(self):
         """
@@ -235,7 +307,7 @@ class ResNet_DM(nn.Module):
         which does the classification of pixel into classes
         """
         b = []
-        b.append(self.ASPP.parameters())
+        b.append(self.layer6.parameters())
 
         for j in range(len(b)):
             for i in b[j]:
@@ -243,6 +315,7 @@ class ResNet_DM(nn.Module):
 
     def DM_params(self, args):
         DM_name = 'DM' + str(args.num_dataset)
+
         b = []
         b.append(getattr(self, DM_name).parameters())
 
@@ -251,14 +324,14 @@ class ResNet_DM(nn.Module):
                 yield i
 
 
-
     def optim_parameters(self, args):
         return [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
-                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+                {'params': self.ASPP_params(), 'lr': args.learning_rate},
+                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate},
+                {'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
 
 
-def Deeplab_DM(num_classes, len_dataset):
-    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes, len_dataset)
+def Deeplab_DM(num_classes, len_dataset, args):
+    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes, len_dataset, args)
     return model
 
