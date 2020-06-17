@@ -68,10 +68,10 @@ SNAPSHOT_DIR = './snapshots/'
 LOG_DIR = './log'
 
 LEARNING_RATE_D = 1e-4
-LAMBDA_ADV_TARGET = 0.001
+LAMBDA_ADV_TARGET = 0.002
 GAN = 'LS'
 
-LAMBDA_DISTILLATION = 0.1
+LAMBDA_DISTILLATION = 0.07
 LAMBDA_MEMORY = [1.2, 1.0]
 ALPHA = [0.25, 0.5]
 
@@ -183,8 +183,8 @@ def adjust_learning_rate_D(optimizer, i_iter):
         optimizer.param_groups[1]['lr'] = lr * 10
 
 def distillation_loss(pred_origin, old_outputs):
-    pred_origin_logsoftmax = pred_origin.log_softmax(dim=1)
-    old_outputs = old_outputs.softmax(dim=1)
+    pred_origin_logsoftmax = (pred_origin / 2).log_softmax(dim=1)
+    old_outputs = (old_outputs / 2).softmax(dim=1)
     loss_distillation = (-(old_outputs * pred_origin_logsoftmax)).sum(dim=1)
     loss_distillation = loss_distillation.sum() / loss_distillation.flatten().shape[0]
     return loss_distillation
