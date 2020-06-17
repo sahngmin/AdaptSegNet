@@ -50,8 +50,8 @@ NUM_STEPS = 250000
 POWER = 0.9
 RANDOM_SEED = 1234
 
-# RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-RESTORE_FROM = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
+RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+# RESTORE_FROM = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 # RESTORE_FROM = './snapshots/source_only/GTA5_.pth'
 SAVE_NUM_IMAGES = 2
 

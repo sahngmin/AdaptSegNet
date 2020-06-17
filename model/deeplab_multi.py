@@ -248,7 +248,7 @@ class ResNetMulti(nn.Module):
 
         sampled = torch.zeros(input.size()).cuda()
         for i in range(warper.size(1) // 2):
-            sampler = nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
+            sampler = 0.2 * nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
             sampler = sampler.clamp(min=-1, max=1)
         sampled = functional.grid_sample(input, sampler)
 

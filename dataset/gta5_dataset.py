@@ -43,7 +43,6 @@ class GTA5DataSet(data.Dataset):
         return len(self.files)
         # return 2499
 
-
     def __getitem__(self, index):
         datafiles = self.files[index]
 
