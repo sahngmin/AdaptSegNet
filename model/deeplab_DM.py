@@ -258,7 +258,7 @@ class ResNet_DM(nn.Module):
         x1 = self.layer4(x)
         ### normalizing and scaling
         # print(torch.norm(x1[0], p=2, dim=[1,2,3]))
-        x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3]))
+        x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3], keepdim=True))
         x1[0] = getattr(self, scale_name)[:2048].reshape(1, 2048, 1, 1) * x1[0]
 
         x2 = self.layer6(x1[0])
@@ -267,7 +267,7 @@ class ResNet_DM(nn.Module):
         x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
         ### normalizing and scaling
         # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
-        x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3]))
+        x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3], keepdim=True))
         x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
 
         x3 = getattr(self, DM_name)(x3)
