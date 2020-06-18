@@ -34,6 +34,22 @@ TARGET = 'cityscapes'
 SET = 'train'
 NUM_DATASET = dataset_dict[TARGET]
 
+LEARNING_RATE = 2.5e-4
+MOMENTUM = 0.9
+WEIGHT_DECAY = 0.0005
+POWER = 0.9
+
+LEARNING_RATE_D = 1e-4
+
+GAN = 'LS'
+
+LAMBDA_ADV_TARGET = 0.0025
+LAMBDA_DISTILLATION = 0.1
+LAMBDA_MEMORY = [1.2, 1.0]
+ALPHA = [0.25, 0.5]
+
+RANDOM_SEED = 1338
+
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 MODEL = 'DeepLab'
@@ -48,14 +64,7 @@ DATA_DIRECTORY_TARGET = '/work/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
-LEARNING_RATE = 2.5e-4
-MOMENTUM = 0.9
-WEIGHT_DECAY = 0.0005
-POWER = 0.9
-
 NUM_CLASSES = 19
-
-RANDOM_SEED = 1338
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 RESTORE_FROM_DEEPLAB = './snapshots/source_only/GTA5_best_model.pth'
@@ -64,16 +73,8 @@ RESTORE_FROM_PREVDOMAIN = './snapshots/single_level_DM/GTA5tocityscapes_best_mod
 SAVE_NUM_IMAGES = 2
 
 SNAPSHOT_DIR = './snapshots/'
-
 LOG_DIR = './log'
 
-LEARNING_RATE_D = 1e-4
-LAMBDA_ADV_TARGET = 0.0025
-GAN = 'LS'
-
-LAMBDA_DISTILLATION = 0.1
-LAMBDA_MEMORY = [1.2, 1.0]
-ALPHA = [0.25, 0.5]
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
