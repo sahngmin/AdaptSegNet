@@ -40,9 +40,6 @@ IGNORE_LABEL = 255
 NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
 
-RESTORE_FROM_SOURCE_ONLY = './snapshots/source_only/GTA5_best_model.pth'
-RESTORE_FROM_SINGLE_LEVEL = './snapshots/single_level/GTA5tocityscapes_best_model.pth'
-RESTORE_FROM_SINGLE_LEVEL_DM = './snapshots/single_level_DM/GTA5tocityscapes_best_model.pth'
 SET = 'val'
 
 RANDOM_SEED = 1338
@@ -80,12 +77,6 @@ def get_arguments():
                         help="The index of the label to ignore during the training.")
     parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
                         help="Number of classes to predict (including background).")
-    parser.add_argument("--restore-from-source-only", type=str, default=RESTORE_FROM_SOURCE_ONLY,
-                        help="Where restore model parameters from.")
-    parser.add_argument("--restore-from-single-level", type=str, default=RESTORE_FROM_SINGLE_LEVEL,
-                        help="Where restore model parameters from.")
-    parser.add_argument("--restore-from-single-level-dm", type=str, default=RESTORE_FROM_SINGLE_LEVEL_DM,
-                        help="Where restore model parameters from.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
     parser.add_argument("--save", type=str, default=SAVE_PATH,
@@ -148,7 +139,7 @@ def main():
                 for i in range(args.num_dataset - 1):
                     filename += targetlist[i]
                     filename += 'to'
-                saved_state_dict = torch.load('./snapshots/single_level_DM/' + filename + str((files + 1) * args.save_pred_every) + '.pth')
+                saved_state_dict = torch.load('./snapshots/single_level_DM/' + filename + str(args.target) + str((files + 1) * args.save_pred_every) + '.pth')
                 new_params = model.state_dict().copy()
                 for i in saved_state_dict:
                     new_params[i] = saved_state_dict[i]
@@ -214,13 +205,13 @@ def main():
                         foldername += targetlist[i]
                         foldername += 'to'
                     if not os.path.exists(
-                            os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every))):
+                            os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every))):
                         os.makedirs(
-                            os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every)))
+                            os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every)))
                     output.save(
-                        os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every), name))
+                        os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every), name))
                     output_col.save(
-                        os.path.join(args.save, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every),
+                        os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every),
                                      name.split('.')[0] + '_color.png'))
 
 

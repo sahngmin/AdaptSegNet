@@ -41,7 +41,6 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     with open(join(devkit_dir, 'info.json'), 'r') as fp:
       info = json.load(fp)
     num_classes = np.int(info['classes'])
-    # print('Num classes', num_classes)
     name_classes = np.array(info['label'], dtype=np.str)
     mapping = np.array(info['label2train'], dtype=np.int)
     hist = np.zeros((num_classes, num_classes))
@@ -91,7 +90,7 @@ def main(args):
                 for i in range(args.num_dataset - 1):
                     foldername += targetlist[i]
                     foldername += 'to'
-                pred_dir = join(args.pred_dir, 'single_level_DM', foldername, 'step' + str((files + 1) * args.save_pred_every))
+                pred_dir = join(args.pred_dir, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every))
 
         compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
     # compute_mIoU(args.gt_dir, args.pred_dir, args.devkit_dir)
