@@ -7,15 +7,15 @@ from PIL import Image
 from os.path import join
 
 SOURCE_ONLY = False
-MEMORY = True
+MEMORY = False
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 155000  # early stopping
+NUM_STEPS_STOP = 250000  # early stopping
 
 RANDOM_SEED = 1338
 
-dataset_dict = {'cityscapes': 1, 'synthia': 2}
-TARGET = 'cityscapes'
+dataset_dict = {'CityScapes': 1, 'Synthia': 2}
+TARGET = 'CityScapes'
 NUM_DATASET = dataset_dict[TARGET]
 
 def fast_hist(a, b, n):
@@ -93,12 +93,19 @@ def main(args):
                 pred_dir = join(args.pred_dir, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every))
 
         compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
-    # compute_mIoU(args.gt_dir, args.pred_dir, args.devkit_dir)
+    # targetlist = list(dataset_dict.keys())
+    # foldername = 'GTA5to'
+    # for i in range(args.num_dataset - 1):
+    #     foldername += targetlist[i]
+    #     foldername += 'to'
+    # pred_dir = join(args.pred_dir, 'single_level_DM', foldername + str(args.target),
+    #                 'step' + str(130000))
+    # compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_dir', type=str, default='/work/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
+    parser.add_argument('--gt_dir', type=str, default='/home/joonhkim/UDA/datasets/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
     parser.add_argument('--pred_dir', type=str, default='./result/cityscapes', help='directory which stores CityScapes val pred images')
     parser.add_argument('--devkit_dir', default='dataset/cityscapes_list', help='base directory of cityscapes')
 

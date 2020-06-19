@@ -23,14 +23,16 @@ from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 
 SOURCE_ONLY = False
-MEMORY = True
+MEMORY = False
+SCALE = False
+FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 155000  # early stopping
+NUM_STEPS_STOP = 250000  # early stopping
 NUM_STEPS = 250000
 
-dataset_dict = {'cityscapes': 1, 'synthia': 2}
-TARGET = 'cityscapes'
+dataset_dict = {'CityScapes': 1, 'Synthia': 2}
+TARGET = 'CityScapes'
 SET = 'train'
 NUM_DATASET = dataset_dict[TARGET]
 
@@ -43,9 +45,10 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'LS'
 
-LAMBDA_ADV_TARGET = 0.0025
+LAMBDA_ADV_TARGET = [0.001, 0.003]
+LAMBDA_ADV_MEMORY = [0.001, 0.003]
 LAMBDA_DISTILLATION = 0.1
-LAMBDA_MEMORY = [1.2, 1.0]
+LAMBDA_MEMORY = [1.0]
 ALPHA = [0.25, 0.5]
 
 RANDOM_SEED = 1338
@@ -56,11 +59,11 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
-DATA_DIRECTORY = '/work/GTA5'
+DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
-DATA_DIRECTORY_TARGET = '/work/CityScapes'
+DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
@@ -68,7 +71,7 @@ NUM_CLASSES = 19
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 RESTORE_FROM_DEEPLAB = './snapshots/source_only/GTA5_best_model.pth'
-RESTORE_FROM_PREVDOMAIN = './snapshots/single_level_DM/GTA5tocityscapes_best_model.pth'
+RESTORE_FROM_PREVDOMAIN = './snapshots/single_level_DM/GTA5toCityScapes_best_model.pth'
 
 SAVE_NUM_IMAGES = 2
 
@@ -86,7 +89,7 @@ def get_arguments():
     parser.add_argument("--model", type=str, default=MODEL,
                         help="available options : DeepLab")
     parser.add_argument("--target", type=str, default=TARGET,
-                        help="available options : cityscapes, synthia")
+                        help="available options : CityScapes, Synthia")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
@@ -113,7 +116,9 @@ def get_arguments():
                         help="Base learning rate for training with polynomial decay.")
     parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
                         help="Base learning rate for discriminator.")
-    parser.add_argument("--lambda-adv-target", type=float, default=LAMBDA_ADV_TARGET,
+    parser.add_argument("--lambda-adv-target", type=list, default=LAMBDA_ADV_TARGET,
+                        help="lambda_adv for adversarial training.")
+    parser.add_argument("--lambda-adv-memory", type=list, default=LAMBDA_ADV_MEMORY,
                         help="lambda_adv for adversarial training.")
     parser.add_argument("--lambda-memory", type=list, default=LAMBDA_MEMORY)
     parser.add_argument("--lambda-distillation", type=float, default=LAMBDA_DISTILLATION)
@@ -159,6 +164,8 @@ def get_arguments():
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
     parser.add_argument("--memory", action='store_true', default=MEMORY)
+    parser.add_argument("--scale", action='store_true', default=SCALE)
+    parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
     parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
     return parser.parse_args()
 
@@ -311,18 +318,32 @@ def main():
     else:
         if not args.memory:  # single-level alignment without DM
             model = Deeplab(num_classes=args.num_classes)
-            if args.restore_from_deeplab[:4] == 'http':  # load model trained on source domain
-                saved_state_dict = model_zoo.load_url(args.restore_from_deeplab)
-            else:
-                saved_state_dict = torch.load(args.restore_from_deeplab)
+            if args.from_scratch:  # load pretrained ResNet
+                if args.restore_from_resnet[:4] == 'http':
+                    saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
+                else:
+                    saved_state_dict = torch.load(args.restore_from_resnet)
 
-            new_params = model.state_dict().copy()
-            for i in saved_state_dict:
-                # layer5.conv2d_list.3.weight
-                i_parts = i.split('.')
-                if not i_parts[0] == 'layer5':
-                    new_params[i] = saved_state_dict[i]
-            model.load_state_dict(new_params)
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict:
+                    # Scale.layer5.conv2d_list.3.weight
+                    i_parts = i.split('.')
+                    if not i_parts[1] == 'layer5':
+                        new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+                model.load_state_dict(new_params)
+            else:  # load DeepLab trained on source domain
+                if args.restore_from_deeplab[:4] == 'http':
+                    saved_state_dict = model_zoo.load_url(args.restore_from_deeplab)
+                else:
+                    saved_state_dict = torch.load(args.restore_from_deeplab)
+
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict:
+                    # layer5.conv2d_list.3.weight
+                    i_parts = i.split('.')
+                    if not i_parts[0] == 'layer5':
+                        new_params[i] = saved_state_dict[i]
+                model.load_state_dict(new_params)
 
             model.train()
             model.to(device)
@@ -427,12 +448,12 @@ def main():
 
                     pred_target = model(images, input_size_target)
 
-                    D_out = model_D(F.softmax(pred_target))
+                    D_out = model_D(F.softmax(pred_target, dim=1))
 
                     loss_adv_target = bce_loss(D_out,
                                                 torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
-                    loss = args.lambda_adv_target * loss_adv_target
+                    loss = args.lambda_adv_target[0] * loss_adv_target
                     loss = loss / args.iter_size
                     loss.backward()
                     loss_adv_target_value += loss_adv_target.item() / args.iter_size
@@ -446,7 +467,7 @@ def main():
                     # train with source
                     pred = pred.detach()
 
-                    D_out = model_D(F.softmax(pred))
+                    D_out = model_D(F.softmax(pred, dim=1))
 
                     loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                     loss_D = loss_D / args.iter_size / 2
@@ -458,7 +479,7 @@ def main():
                     # train with target
                     pred_target = pred_target.detach()
 
-                    D_out = model_D(F.softmax(pred_target))
+                    D_out = model_D(F.softmax(pred_target, dim=1))
 
                     loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
 
@@ -506,14 +527,27 @@ def main():
             model = Deeplab_DM(num_classes=args.num_classes, len_dataset=args.num_dataset, args=args)
 
             if args.num_dataset == 1:  # first domain
-                saved_state_dict = torch.load(args.restore_from_deeplab)
-                new_params = model.state_dict().copy()
-                for i in saved_state_dict:
-                    # layer5.conv2d_list.3.weight
-                    i_parts = i.split('.')
-                    if not i_parts[0] == 'layer5':
-                        new_params[i] = saved_state_dict[i]
-                model.load_state_dict(new_params)
+                if args.from_scratch:  # load pretrained ResNet
+                    if args.restore_from_resnet[:4] == 'http':
+                        saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
+                    else:
+                        saved_state_dict = torch.load(args.restore_from_resnet)
+                    new_params = model.state_dict().copy()
+                    for i in saved_state_dict:
+                        # Scale.layer5.conv2d_list.3.weight
+                        i_parts = i.split('.')
+                        if not i_parts[1] == 'layer5':
+                            new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+                    model.load_state_dict(new_params)
+                else:  # load DeepLab trained on source domain
+                    saved_state_dict = torch.load(args.restore_from_deeplab)
+                    new_params = model.state_dict().copy()
+                    for i in saved_state_dict:
+                        # layer5.conv2d_list.3.weight
+                        i_parts = i.split('.')
+                        if not i_parts[0] == 'layer5':
+                            new_params[i] = saved_state_dict[i]
+                    model.load_state_dict(new_params)
 
             else:  # after first domain
                 saved_state_dict = torch.load(args.restore_from_prevdomain)
@@ -526,9 +560,10 @@ def main():
             model.train()
             model.to(device)
 
-            ref_model = copy.deepcopy(model)  # reference model for distillation loss
-            for params in ref_model.parameters():
-                params.requires_grad = False
+            if not args.num_dataset == 1:
+                ref_model = copy.deepcopy(model)  # reference model for distillation loss
+                for params in ref_model.parameters():
+                    params.requires_grad = False
 
             cudnn.benchmark = True
 
@@ -548,7 +583,7 @@ def main():
 
             trainloader_iter = enumerate(trainloader)
 
-            if args.target == 'cityscapes':
+            if args.target == 'CityScapes':
                 targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
                                                                  crop_size=input_size_target,
@@ -556,7 +591,7 @@ def main():
                                                                  set=args.set),
                                                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                                pin_memory=True)
-            elif args.target == 'synthia':  # SYNTHIA dataloader 필요!!!
+            elif args.target == 'Synthia':  # SYNTHIA dataloader 필요!!!
                 targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
                                                                  crop_size=input_size_target,
@@ -601,6 +636,7 @@ def main():
                 loss_memory_value = 0
                 loss_distillation_value = 0
                 loss_adv_target_value = 0
+                loss_adv_memory_value = 0
                 loss_D_value = 0
 
                 optimizer.zero_grad()
@@ -626,18 +662,22 @@ def main():
                     labels = labels.long().to(device)
 
                     pred_both, pred_origin, pred_DM = model(images, input_size, args)
-                    _, old_outputs, _ = ref_model(images, input_size, args)
 
                     loss_seg = seg_loss(pred_both, labels)
-                    loss_distillation = distillation_loss(pred_origin, old_outputs)
-                    loss_memory = seg_loss(pred_DM, labels)
+                    loss = loss_seg
+                    loss_seg_value += loss_seg.item() / args.iter_size
 
-                    loss = loss_seg + args.lambda_distillation * loss_distillation + args.lambda_memory[args.num_dataset - 1] * loss_memory
+                    if not args.num_dataset == 1:
+                        _, old_outputs, _ = ref_model(images, input_size, args)
+                        loss_distillation = distillation_loss(pred_origin, old_outputs)
+                        loss_memory = seg_loss(pred_DM, labels)
+                        loss += args.lambda_distillation * loss_distillation + args.lambda_memory[args.num_dataset - 2] * loss_memory
+
+                        loss_distillation_value += loss_distillation.item() / args.iter_size
+                        loss_memory_value += loss_memory.item() / args.iter_size
+
                     loss = loss / args.iter_size
                     loss.backward()
-                    loss_seg_value += loss_seg.item() / args.iter_size
-                    loss_distillation_value += loss_distillation.item() / args.iter_size
-                    loss_memory_value += loss_memory.item() / args.iter_size
 
                     # train with target
 
@@ -645,17 +685,23 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    pred_target, _, _ = model(images, input_size_target, args)
+                    pred_both_target, _, pred_DM_target = model(images, input_size_target, args)
 
-                    D_out = model_D(F.softmax(pred_target))
+                    D_out = model_D(F.softmax(pred_both_target, dim=1))
+                    D_out_memory = model_D(F.softmax(pred_DM_target, dim=1))
 
                     loss_adv_target = bce_loss(D_out,
                                                torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                    loss_adv_memory = bce_loss(D_out_memory,
+                                               torch.FloatTensor(D_out_memory.data.size()).fill_(source_label).to(device))
 
-                    loss = args.lambda_adv_target * loss_adv_target
+                    loss = args.lambda_adv_target[args.num_dataset - 1] * loss_adv_target \
+                           + args.lambda_adv_memory[args.num_dataset - 1] * loss_adv_memory
+                    loss_adv_target_value += loss_adv_target.item() / args.iter_size
+                    loss_adv_memory_value += loss_adv_memory.item() / args.iter_size
+
                     loss = loss / args.iter_size
                     loss.backward()
-                    loss_adv_target_value += loss_adv_target.item() / args.iter_size
 
                     # train D
 
@@ -666,7 +712,7 @@ def main():
                     # train with source
                     pred = pred_both.detach()
 
-                    D_out = model_D(F.softmax(pred))
+                    D_out = model_D(F.softmax(pred, dim=1))
 
                     loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                     loss_D = loss_D / args.iter_size / 2
@@ -676,9 +722,9 @@ def main():
                     loss_D_value += loss_D.item()
 
                     # train with target
-                    pred_target = pred_target.detach()
+                    pred_target = pred_both_target.detach()
 
-                    D_out = model_D(F.softmax(pred_target))
+                    D_out = model_D(F.softmax(pred_target, dim=1))
 
                     loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
 
@@ -696,6 +742,7 @@ def main():
                         'loss_distillation': loss_distillation_value,
                         'loss_memory': loss_memory_value,
                         'loss_adv_target': loss_adv_target_value,
+                        'loss_adv_memory': loss_adv_memory_value,
                         'loss_D': loss_D_value
                     }
 
@@ -705,8 +752,8 @@ def main():
 
                 print('exp = {}'.format(args.snapshot_dir))
                 print(
-                    'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_distill = {3:.3f} loss_memory = {4:.3f} loss_adv = {5:.3f} loss_D = {6:.3f}'.format(
-                        i_iter, args.num_steps, loss_seg_value, loss_distillation_value, loss_memory_value, loss_adv_target_value, loss_D_value))
+                    'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_distill = {3:.3f} loss_memory = {4:.3f} loss_adv = {5:.3f} loss_adv_memory = {6:.3f} loss_D = {7:.3f}'.format(
+                        i_iter, args.num_steps, loss_seg_value, loss_distillation_value, loss_memory_value, loss_adv_target_value, loss_adv_memory_value, loss_D_value))
 
                 if args.num_dataset == 1:
                     if i_iter >= args.num_steps_stop - 1:

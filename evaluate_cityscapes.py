@@ -20,21 +20,22 @@ from PIL import Image
 import torch.nn as nn
 
 SOURCE_ONLY = False
-MEMORY = True
+MEMORY = False
+SCALE = False
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 155000  # early stopping
+NUM_STEPS_STOP = 250000  # early stopping
 
-dataset_dict = {'cityscapes': 1, 'synthia': 2}
-TARGET = 'cityscapes'
+dataset_dict = {'CityScapes': 1, 'Synthia': 2}
+TARGET = 'CityScapes'
 NUM_DATASET = dataset_dict[TARGET]
-INPUT_SIZE_TARGET = '1024,512'
+TARGET_SIZE = '2048,1024'
 
 ALPHA = [0.25, 0.5]
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = '/work/CityScapes'
+DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/CityScapes'
 DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
 SAVE_PATH = './result/cityscapes'
 
@@ -68,8 +69,8 @@ def get_arguments():
     """
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
     parser.add_argument("--target", type=str, default=TARGET,
-                        help="available options : cityscapes, synthia")
-    parser.add_argument("--input-size-target", type=str, default=INPUT_SIZE_TARGET,
+                        help="available options : Cityscapes, Synthia")
+    parser.add_argument("--target-size", type=str, default=TARGET_SIZE,
                         help="Comma-separated string with height and width of target images.")
     parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
                         help="Path to the directory containing the Cityscapes dataset.")
@@ -93,6 +94,7 @@ def get_arguments():
                         help="Random seed to have reproducible results.")
     parser.add_argument("--memory", action='store_true', default=MEMORY)
     parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
+    parser.add_argument("--scale", action='store_true', default=SCALE)
     parser.add_argument("--alpha", type=list, default=ALPHA)
     return parser.parse_args()
 
@@ -106,8 +108,8 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    w, h = map(int, args.input_size_target.split(','))
-    input_size_target = (w, h)
+    w, h = map(int, args.target_size.split(','))
+    target_size = (w, h)
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
@@ -127,7 +129,7 @@ def main():
         else:
             if not args.memory:
                 model = Deeplab(num_classes=args.num_classes)
-                saved_state_dict = torch.load('./snapshots/single_level/GTA5tocityscapes' + str((files + 1) * args.save_pred_every) + '.pth')
+                saved_state_dict = torch.load('./snapshots/single_level/GTA5toCityScapes' + str((files + 1) * args.save_pred_every) + '.pth')
                 new_params = model.state_dict().copy()
                 for i in saved_state_dict:
                     # layer5.conv2d_list.3.weight
@@ -152,10 +154,10 @@ def main():
         model = model.to(device)
 
         model.eval()
-        if args.target == 'cityscapes':
+        if args.target == 'CityScapes':
             testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                             batch_size=1, shuffle=False, pin_memory=True)
-        elif args.target == 'synthia':  # SYNTHIA dataloader 필요!!!
+        elif args.target == 'Synthia':  # SYNTHIA dataloader 필요!!!
             testloader = data.DataLoader(
                 cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
                                   mirror=False, set=args.set),
@@ -170,13 +172,13 @@ def main():
             image = image.to(device)
 
             if SOURCE_ONLY:
-                output = model(image, input_size_target)
+                output = model(image, target_size)
             else:
                 if not args.memory:
-                    output = model(image, input_size_target)
+                    output = model(image, target_size)
                     output = output.cpu().data[0].numpy()
                 else:
-                    output, _, _ = model(image, input_size_target, args)
+                    output, _, _ = model(image, target_size, args)
                     output = output.cpu().data[0].numpy()
 
             output = output.transpose(1,2,0)

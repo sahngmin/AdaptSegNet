@@ -192,6 +192,7 @@ class DM(nn.Module):
 
 class ResNet_DM(nn.Module):
     def __init__(self, block, layers, num_classes, len_dataset, args):
+        self.scale = args.scale
         self.inplanes = 64
         super(ResNet_DM, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -207,13 +208,16 @@ class ResNet_DM(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
-        scale = torch.randn(2048 + 3072).fill_(6000)
-        scale[:2048] *= args.alpha[len_dataset - 1]
         for num_dataset in range(len_dataset):
             DM_name = 'DM' + str(num_dataset + 1)
-            scale_name = 'scale' + str(num_dataset + 1)
             setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
-            setattr(self, scale_name, nn.Parameter(scale.cuda(), requires_grad=True))
+
+        if self.scale:
+            scale = torch.randn(2048 + 3072).fill_(6000)
+            scale[:2048] *= args.alpha[len_dataset - 1]
+            for num_dataset in range(len_dataset):
+                scale_name = 'scale' + str(num_dataset + 1)
+                setattr(self, scale_name, nn.Parameter(scale.cuda(), requires_grad=True))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -245,7 +249,8 @@ class ResNet_DM(nn.Module):
 
     def forward(self, x, input_size, args):
         DM_name = 'DM' + str(args.num_dataset)
-        scale_name = 'scale' + str(args.num_dataset)
+        if self.scale:
+            scale_name = 'scale' + str(args.num_dataset)
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -256,24 +261,24 @@ class ResNet_DM(nn.Module):
         x = self.layer3(x)
 
         x1 = self.layer4(x)
-        ### normalizing and scaling
-        # print(torch.norm(x1[0], p=2, dim=[1,2,3]))
-        x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3], keepdim=True))
-        x1[0] = getattr(self, scale_name)[:2048].reshape(1, 2048, 1, 1) * x1[0]
+        if self.scale:  ### normalizing and scaling
+            # print(torch.norm(x1[0], p=2, dim=[1,2,3]))
+            x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3], keepdim=True))
+            x1[0] = getattr(self, scale_name)[:2048].reshape(1, 2048, 1, 1) * x1[0]
 
         x2 = self.layer6(x1[0])
         x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
         x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
-        ### normalizing and scaling
-        # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
-        x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3], keepdim=True))
-        x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
+        if self.scale:  ### normalizing and scaling
+            # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
+            x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3], keepdim=True))
+            x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
 
         x3 = getattr(self, DM_name)(x3)
         x3_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x3)  # ResNet + DM
 
-        x_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2 + x3)  # ResNet + (DM+ASPP)
+        x_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2 + x3)  # ResNet + (ASPP+DM)
 
         return x_up, x2_up, x3_up
 
@@ -325,10 +330,27 @@ class ResNet_DM(nn.Module):
 
 
     def optim_parameters(self, args):
-        return [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                {'params': self.ASPP_params(), 'lr': args.learning_rate},
-                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate},
-                {'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
+        if args.num_dataset == 1:
+            if self.scale:
+                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                                    {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
+                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate},
+                                    {'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
+            else:
+                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                                    {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
+                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+        else:
+            if self.scale:
+                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                                    {'params': self.ASPP_params(), 'lr': args.learning_rate},
+                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate},
+                                    {'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
+            else:
+                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                                    {'params': self.ASPP_params(), 'lr': args.learning_rate},
+                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+        return optim_parameters
 
 
 def Deeplab_DM(num_classes, len_dataset, args):
