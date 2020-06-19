@@ -1,0 +1,82 @@
+Step:  5000
+===> mIoU: 35.72
+Step:  10000
+===> mIoU: 34.57
+Step:  15000
+===> mIoU: 34.33
+Step:  20000
+===> mIoU: 34.03
+Step:  25000
+===> mIoU: 33.71
+Step:  30000
+===> mIoU: 38.92
+Step:  35000
+===> mIoU: 35.34
+Step:  40000
+===> mIoU: 32.93
+Step:  45000
+===> mIoU: 33.95
+Step:  50000
+===> mIoU: 37.2
+Step:  55000
+===> mIoU: 35.58
+Step:  60000
+===> mIoU: 38.03
+Step:  65000
+===> mIoU: 36.86
+Step:  70000
+===> mIoU: 36.68
+Step:  75000
+===> mIoU: 37.81
+Step:  80000
+===> mIoU: 38.14
+Step:  85000
+===> mIoU: 38.28
+Step:  90000
+===> mIoU: 33.88
+Step:  95000
+===> mIoU: 37.94
+Step:  100000
+===> mIoU: 31.0
+Step:  105000
+===> mIoU: 35.51
+Step:  110000
+===> mIoU: 36.38
+Step:  115000
+===> mIoU: 38.28
+Step:  120000
+===> mIoU: 39.86
+Step:  125000
+===> mIoU: 38.55
+Step:  130000
+===> mIoU: 39.41
+Step:  135000
+===> mIoU: 39.82
+Step:  140000
+===> mIoU: 38.19
+Step:  145000
+===> mIoU: 38.76
+Step:  150000
+===> mIoU: 39.4
+
+Step: 120000
+===>road:	87.11
+===>sidewalk:	20.37
+===>building:	80.19
+===>wall:	19.37
+===>fence:	24.11
+===>pole:	26.83
+===>light:	31.47
+===>sign:	19.57
+===>vegetation:	81.5
+===>terrain:	22.71
+===>sky:	77.41
+===>person:	54.34
+===>rider:	24.04
+===>car:	79.56
+===>truck:	25.59
+===>bus:	19.09
+===>train:	0.37
+===>motocycle:	26.48
+===>bicycle:	37.28
+===> mIoU: 39.86

@@ -34,12 +34,15 @@ BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+# DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
+
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 LEARNING_RATE = 2.5e-4
@@ -303,11 +306,16 @@ def main():
             if i_iter >= args.num_steps_stop - 1:
                 print('save model ...')
                 torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only', 'GTA5_' + str(args.num_steps_stop) + '.pth'))
+                torch.save(warper.state_dict(),
+                           osp.join(args.snapshot_dir, 'source_only', 'GTA5_Warper' + str(args.num_steps_stop) + '.pth'))
                 break
 
             if i_iter % args.save_pred_every == 0 and i_iter != 0:
                 print('taking snapshot ...')
                 torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only', 'GTA5_' + str(i_iter) + '.pth'))
+                torch.save(warper.state_dict(),
+                           osp.join(args.snapshot_dir, 'source_only',
+                                    'GTA5_Warper' + str(args.num_steps_stop) + '.pth'))
 
         if args.tensorboard:
             writer.close()
@@ -337,8 +345,6 @@ def main():
                                            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                            pin_memory=True)
 
-
-
             targetloader_iter = enumerate(targetloader)
 
             # implement model.optim_parameters(args) to handle different models' lr setting
@@ -350,13 +356,11 @@ def main():
             optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
             optimizer_D2.zero_grad()
 
-
             if args.gan == 'Vanilla':
                 bce_loss = torch.nn.BCEWithLogitsLoss()
             elif args.gan == 'LS':
                 bce_loss = torch.nn.MSELoss()
             seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
-
 
             # labels for adversarial training
             source_label = 0
