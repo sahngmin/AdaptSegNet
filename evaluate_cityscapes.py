@@ -13,6 +13,7 @@ from torch.utils import data, model_zoo
 from model.deeplab import Res_Deeplab
 from model.deeplab_multi import DeeplabMulti
 from model.deeplab_vgg import DeeplabVGG
+from model.warper import Warper
 from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
@@ -28,7 +29,7 @@ NUM_STEPS_STOP = 150000  # early stopping
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = '/work/CityScapes'
+DATA_DIRECTORY = '/home/aiwc/Datasets/CityScapes'
 DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
 SAVE_PATH = './result/cityscapes'
 
@@ -90,6 +91,8 @@ def get_arguments():
                         help="Number of training steps for early stopping.")
     parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
     parser.add_argument("--multi-gpu", action='store_false')
+    parser.add_argument("--warper", default=True)
+
     return parser.parse_args()
 
 
@@ -99,6 +102,9 @@ def main():
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+
+    input_size = [1024, 512]
 
     """Create the model and start the evaluation process."""
 
@@ -147,6 +153,12 @@ def main():
 
         model.eval()
 
+
+        args.warper == True:
+            WarpModel = Warper()
+            WarpModel.train()
+            WarpModel.to(device)
+
         testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                         batch_size=1, shuffle=False, pin_memory=True)
 
@@ -159,7 +171,7 @@ def main():
             image = image.to(device)
 
             if args.model == 'DeeplabMulti':
-                output1, output2 = model(image)
+                output1, output2 = model(image, input_size)
                 output = interp(output2).cpu().data[0].numpy()
             elif args.model == 'DeeplabVGG' or args.model == 'Oracle':
                 output = model(image)
