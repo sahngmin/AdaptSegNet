@@ -23,7 +23,7 @@ from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 
 SOURCE_ONLY = False
-MEMORY = False
+MEMORY = True
 SCALE = False
 FROM_SCRATCH = True
 
@@ -59,11 +59,11 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
-DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
+DATA_DIRECTORY = '/work/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
-DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
+DATA_DIRECTORY_TARGET = '/work/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
@@ -177,18 +177,21 @@ def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
 
 
-def adjust_learning_rate(optimizer, i_iter):
+def adjust_learning_rate(optimizer, i_iter, args):
     lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) > 1:
-        optimizer.param_groups[1]['lr'] = lr * 10
-
+        if args.num_dataset == 1:
+            for i in range(1, len(optimizer.param_groups)):
+                optimizer.param_groups[i]['lr'] = lr * 10
+        else:
+            optimizer.param_groups[1]['lr'] = lr
+            for i in range(2, len(optimizer.param_groups)):
+                optimizer.param_groups[i]['lr'] = lr * 10
 
 def adjust_learning_rate_D(optimizer, i_iter):
     lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
     optimizer.param_groups[0]['lr'] = lr
-    if len(optimizer.param_groups) > 1:
-        optimizer.param_groups[1]['lr'] = lr * 10
 
 def distillation_loss(pred_origin, old_outputs):
     pred_origin_logsoftmax = (pred_origin / 2).log_softmax(dim=1)
@@ -268,7 +271,7 @@ def main():
             loss_seg_value = 0
 
             optimizer.zero_grad()
-            adjust_learning_rate(optimizer, i_iter)
+            adjust_learning_rate(optimizer, i_iter, args)
 
             for sub_i in range(args.iter_size):
 
@@ -409,7 +412,7 @@ def main():
                 loss_D_value = 0
 
                 optimizer.zero_grad()
-                adjust_learning_rate(optimizer, i_iter)
+                adjust_learning_rate(optimizer, i_iter, args)
 
                 optimizer_D.zero_grad()
                 adjust_learning_rate_D(optimizer_D, i_iter)
@@ -640,7 +643,7 @@ def main():
                 loss_D_value = 0
 
                 optimizer.zero_grad()
-                adjust_learning_rate(optimizer, i_iter)
+                adjust_learning_rate(optimizer, i_iter, args)
 
                 optimizer_D.zero_grad()
                 adjust_learning_rate_D(optimizer_D, i_iter)

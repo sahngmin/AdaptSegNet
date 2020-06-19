@@ -7,7 +7,7 @@ from PIL import Image
 from os.path import join
 
 SOURCE_ONLY = False
-MEMORY = False
+MEMORY = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 250000  # early stopping
@@ -105,7 +105,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_dir', type=str, default='/home/joonhkim/UDA/datasets/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
+    parser.add_argument('--gt_dir', type=str, default='/work/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
     parser.add_argument('--pred_dir', type=str, default='./result/cityscapes', help='directory which stores CityScapes val pred images')
     parser.add_argument('--devkit_dir', default='dataset/cityscapes_list', help='base directory of cityscapes')
 
