@@ -13,7 +13,6 @@ from torch.utils import data, model_zoo
 from model.deeplab import Res_Deeplab
 from model.deeplab_multi import DeeplabMulti
 from model.deeplab_vgg import DeeplabVGG
-from model.warper import Warper
 from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
@@ -21,7 +20,7 @@ from PIL import Image
 
 import torch.nn as nn
 
-SOURCE_ONLY = True
+SOURCE_ONLY = False
 LEVEL = 'single-level'
 
 SAVE_PRED_EVERY = 5000
@@ -104,7 +103,7 @@ def main():
     random.seed(seed)
 
 
-    input_size = [1024, 512]
+    input_size = [2048, 1024]
 
     """Create the model and start the evaluation process."""
 
@@ -154,10 +153,6 @@ def main():
         model.eval()
 
 
-        args.warper == True:
-            WarpModel = Warper()
-            WarpModel.train()
-            WarpModel.to(device)
 
         testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                         batch_size=1, shuffle=False, pin_memory=True)
@@ -171,7 +166,7 @@ def main():
             image = image.to(device)
 
             if args.model == 'DeeplabMulti':
-                output1, output2 = model(image, input_size)
+                output1, output2 = model(image, input_size, warping=args.warper)
                 output = interp(output2).cpu().data[0].numpy()
             elif args.model == 'DeeplabVGG' or args.model == 'Oracle':
                 output = model(image)

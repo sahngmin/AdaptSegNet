@@ -14,14 +14,13 @@ import os
 import os.path as osp
 import random
 from tensorboardX import SummaryWriter
-from model.warper import Warper
 from model.deeplab_multi import DeeplabMulti
 from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 
-SOURCE_ONLY = True
+SOURCE_ONLY = False
 LEVEL = 'single-level'
 
 SAVE_PRED_EVERY = 5000
@@ -217,11 +216,6 @@ def main():
                 # print i_parts
         model.load_state_dict(new_params)
 
-    if args.warper == True:
-        WarpModel = Warper()
-        WarpModel.train()
-        WarpModel.to(device)
-
     model.train()
     model.to(device)
     if args.multi_gpu:
@@ -274,12 +268,9 @@ def main():
 
                 images, labels, _, _ = batch
                 images = images.to(device)
-                labels = labels.long().to(device)
 
-                warper=None
-                if args.warper:
-                    warper, warp_list = WarpModel(images)
-                _, pred2 = model(images, input_size, warper)
+
+                _, pred2 = model(images, input_size, warping=args.warper)
 
                 loss_seg2 = seg_loss(pred2, labels)
                 loss = loss_seg2
@@ -306,16 +297,13 @@ def main():
             if i_iter >= args.num_steps_stop - 1:
                 print('save model ...')
                 torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only', 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                torch.save(warper.state_dict(),
-                           osp.join(args.snapshot_dir, 'source_only', 'GTA5_Warper' + str(args.num_steps_stop) + '.pth'))
+
                 break
 
             if i_iter % args.save_pred_every == 0 and i_iter != 0:
                 print('taking snapshot ...')
                 torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only', 'GTA5_' + str(i_iter) + '.pth'))
-                torch.save(warper.state_dict(),
-                           osp.join(args.snapshot_dir, 'source_only',
-                                    'GTA5_Warper' + str(args.num_steps_stop) + '.pth'))
+
 
         if args.tensorboard:
             writer.close()
@@ -401,11 +389,8 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    warper = None
-                    if args.warper:
-                        warper, warp_list = WarpModel(images)
 
-                    _, pred2 = model(images, input_size, warper)
+                    _, pred2 = model(images, input_size, warping=args.warper)
 
                     loss_seg2 = seg_loss(pred2, labels)
                     loss = loss_seg2
@@ -421,7 +406,7 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    _, pred_target2 = model(images, input_size, warper)
+                    _, pred_target2 = model(images, input_size, warping=args.warper)
 
                     D_out2 = model_D2(F.softmax(pred_target2))
 

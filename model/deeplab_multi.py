@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import torch.nn.functional as functional
 from torch.autograd import Variable
+from model.warper import Warper
 
 
 affine_par = True
@@ -141,6 +142,8 @@ class ResNetMulti(nn.Module):
         self.layer5 = self._make_pred_layer(Classifier_Module, 1024, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
+        self.WarpModel = Warper()
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -171,8 +174,8 @@ class ResNetMulti(nn.Module):
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, x, input_size, warper=None):
-        x = self.conv1(x)
+    def forward(self, image, input_size, warping=False):
+        x = self.conv1(image)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
@@ -187,7 +190,8 @@ class ResNetMulti(nn.Module):
 
         x1_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x1)
         x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
-        if warper is not None:
+        if warping:
+            warper, warp_list = self.WarpModel(image)
             x1_up = self.warp(x1_up, warper)
             x2_up = self.warp(x2_up, warper)
 
