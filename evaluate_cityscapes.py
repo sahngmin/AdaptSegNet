@@ -23,12 +23,14 @@ SOURCE_ONLY = False
 MEMORY = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 250000  # early stopping
+NUM_STEPS_STOP = 155000  # early stopping
 
 dataset_dict = {'cityscapes': 1, 'synthia': 2}
 TARGET = 'cityscapes'
 NUM_DATASET = dataset_dict[TARGET]
 INPUT_SIZE_TARGET = '1024,512'
+
+ALPHA = [0.25, 0.5]
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
@@ -91,6 +93,7 @@ def get_arguments():
                         help="Random seed to have reproducible results.")
     parser.add_argument("--memory", action='store_true', default=MEMORY)
     parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
+    parser.add_argument("--alpha", type=list, default=ALPHA)
     return parser.parse_args()
 
 
@@ -171,8 +174,10 @@ def main():
             else:
                 if not args.memory:
                     output = model(image, input_size_target)
+                    output = output.cpu().data[0].numpy()
                 else:
                     output, _, _ = model(image, input_size_target, args)
+                    output = output.cpu().data[0].numpy()
 
             output = output.transpose(1,2,0)
             output = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)

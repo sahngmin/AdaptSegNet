@@ -10,7 +10,7 @@ SOURCE_ONLY = False
 MEMORY = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 250000  # early stopping
+NUM_STEPS_STOP = 155000  # early stopping
 
 RANDOM_SEED = 1338
 
