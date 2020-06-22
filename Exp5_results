@@ -1,0 +1,127 @@
+LAMBDA_ADV_TARGET = 0.002
+LAMBDA_ADV_MEMORY = 0.002
+
+Step:  5000
+===> mIoU: 22.91
+Step:  10000
+===> mIoU: 24.71
+Step:  15000
+===> mIoU: 25.97
+Step:  20000
+===> mIoU: 25.71
+Step:  25000
+===> mIoU: 25.73
+Step:  30000
+===> mIoU: 30.57
+Step:  35000
+===> mIoU: 29.99
+Step:  40000
+===> mIoU: 33.74
+Step:  45000
+===> mIoU: 29.9
+Step:  50000
+===> mIoU: 34.57
+Step:  55000
+===> mIoU: 33.96
+Step:  60000
+===> mIoU: 36.25
+Step:  65000
+===> mIoU: 35.03
+Step:  70000
+===> mIoU: 36.81
+Step:  75000
+===> mIoU: 34.35
+Step:  80000
+===> mIoU: 36.35
+Step:  85000
+===> mIoU: 36.2
+Step:  90000
+===> mIoU: 35.71
+Step:  95000
+===> mIoU: 35.61
+Step:  100000
+===> mIoU: 34.35
+Step:  105000
+===> mIoU: 34.41
+Step:  110000
+===> mIoU: 33.83
+Step:  115000
+===> mIoU: 34.73
+Step:  120000
+===> mIoU: 34.79
+Step:  125000
+===> mIoU: 37.62
+Step:  130000
+===> mIoU: 36.14
+Step:  135000
+===> mIoU: 36.67
+Step:  140000
+===> mIoU: 38.06
+Step:  145000
+===> mIoU: 36.17
+Step:  150000
+===> mIoU: 36.07
+Step:  155000
+===> mIoU: 35.54
+Step:  160000
+===> mIoU: 37.67
+Step:  165000
+===> mIoU: 36.16
+Step:  170000
+===> mIoU: 37.68
+Step:  175000
+===> mIoU: 36.59
+Step:  180000
+===> mIoU: 36.11
+Step:  185000
+===> mIoU: 38.06
+Step:  190000
+===> mIoU: 39.16
+Step:  195000
+===> mIoU: 36.1
+Step:  200000
+===> mIoU: 37.05
+Step:  205000
+===> mIoU: 36.22
+Step:  210000
+===> mIoU: 38.83
+Step:  215000
+===> mIoU: 37.32
+Step:  220000
+===> mIoU: 37.99
+Step:  225000
+===> mIoU: 38.07
+Step:  230000
+===> mIoU: 36.86
+Step:  235000
+===> mIoU: 38.62
+Step:  240000
+===> mIoU: 35.77
+Step:  245000
+===> mIoU: 38.89
+Step:  250000
+===> mIoU: 38.49
+
+Step:  190000
+===>road:	89.52
+===>sidewalk:	33.98
+===>building:	78.68
+===>wall:	21.72
+===>fence:	19.55
+===>pole:	24.1
+===>light:	28.42
+===>sign:	16.4
+===>vegetation:	82.39
+===>terrain:	26.83
+===>sky:	72.75
+===>person:	50.86
+===>rider:	21.72
+===>car:	79.39
+===>truck:	28.11
+===>bus:	21.0
+===>train:	3.28
+===>motocycle:	19.34
+===>bicycle:	25.96
+===> mIoU: 39.16
+
+

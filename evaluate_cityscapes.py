@@ -24,7 +24,7 @@ MEMORY = True
 SCALE = False
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 250000  # early stopping
+NUM_STEPS_STOP = 300000  # early stopping
 
 dataset_dict = {'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'
@@ -35,7 +35,7 @@ ALPHA = [0.25, 0.5]
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = '/work/CityScapes'
+DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/CityScapes'
 DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
 SAVE_PATH = './result/cityscapes'
 
@@ -150,7 +150,8 @@ def main():
                     new_params[i] = saved_state_dict[i]
                 model.load_state_dict(new_params)
 
-        device = torch.device("cuda" if not args.cpu else "cpu")
+        # device = torch.device("cuda" if not args.cpu else "cpu")
+        device = torch.device("cuda:2" if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
 
         model.eval()

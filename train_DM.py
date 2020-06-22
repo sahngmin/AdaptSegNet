@@ -28,8 +28,8 @@ SCALE = False
 FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 250000  # early stopping
-NUM_STEPS = 250000
+NUM_STEPS_STOP = 300000  # early stopping
+NUM_STEPS = 300000
 
 dataset_dict = {'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'
@@ -45,8 +45,8 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'LS'
 
-LAMBDA_ADV_TARGET = [0.001, 0.003]
-LAMBDA_ADV_MEMORY = [0.001, 0.003]
+LAMBDA_ADV_TARGET = [0.002, 0.003]
+LAMBDA_ADV_MEMORY = [0.0015, 0.003]
 LAMBDA_DISTILLATION = 0.1
 LAMBDA_MEMORY = [1.0]
 ALPHA = [0.25, 0.5]
@@ -59,11 +59,11 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
-DATA_DIRECTORY = '/work/GTA5'
+DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
-DATA_DIRECTORY_TARGET = '/work/CityScapes'
+DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
@@ -209,8 +209,8 @@ def main():
 
     """Create the model and start the training."""
 
-    device = torch.device("cuda" if not args.cpu else "cpu")
-
+    # device = torch.device("cuda" if not args.cpu else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else 'cpu')
     w, h = map(int, args.input_size.split(','))
     input_size = (w, h)
 
