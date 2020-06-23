@@ -11,7 +11,7 @@ from PIL import Image
 
 
 class GTA5DataSet(data.Dataset):
-    def __init__(self, root, list_path, max_iters=None, crop_size=(321, 321), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255):
+    def __init__(self, root, list_path, max_iters=None, crop_size=(321, 321), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='val'):
         self.root = root
         self.list_path = list_path
         self.crop_size = crop_size
@@ -40,8 +40,8 @@ class GTA5DataSet(data.Dataset):
             })
 
     def __len__(self):
-        # return len(self.files)
-        return 2499
+        return len(self.files)
+        # return 2499
 
 
     def __getitem__(self, index):

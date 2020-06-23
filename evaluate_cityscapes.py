@@ -29,6 +29,8 @@ NUM_STEPS_STOP = 150000  # early stopping
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = '/home/aiwc/Datasets/CityScapes'
+DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+
 DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
 SAVE_PATH = './result/cityscapes'
 
@@ -102,8 +104,7 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-
-    input_size = [2048, 1024]
+    input_size = [1024, 512]
 
     """Create the model and start the evaluation process."""
 
@@ -151,8 +152,6 @@ def main():
             model = nn.DataParallel(model)
 
         model.eval()
-
-
 
         testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                         batch_size=1, shuffle=False, pin_memory=True)

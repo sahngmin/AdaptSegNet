@@ -9,3 +9,4 @@ data/
 python2_code/
 dataset/
 .DS_Store
+snapshots/
