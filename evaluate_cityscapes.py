@@ -24,7 +24,7 @@ SOURCE_ONLY = False
 LEVEL = 'single-level'
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS_STOP = 75000  # early stopping
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
