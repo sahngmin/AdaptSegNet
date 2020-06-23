@@ -24,7 +24,7 @@ SOURCE_ONLY = False
 LEVEL = 'single-level'
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS_STOP = 75000  # early stopping
 
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
@@ -105,6 +105,7 @@ def main():
     random.seed(seed)
 
     input_size = [1024, 512]
+
 
     """Create the model and start the evaluation process."""
 
@@ -207,8 +208,6 @@ def main():
                                      name.split('.')[0] + '_color.png'))
                 else:
                     raise NotImplementedError('level choice {} is not implemented'.format(args.level))
-
-
 
 if __name__ == '__main__':
     main()
