@@ -103,7 +103,7 @@ def main():
     random.seed(seed)
 
 
-    input_size = [2048, 1024]
+    input_size = (1024, 512)
 
     """Create the model and start the evaluation process."""
 
@@ -151,7 +151,6 @@ def main():
             model = nn.DataParallel(model)
 
         model.eval()
-
 
 
         testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
@@ -208,8 +207,6 @@ def main():
                                      name.split('.')[0] + '_color.png'))
                 else:
                     raise NotImplementedError('level choice {} is not implemented'.format(args.level))
-
-
 
 if __name__ == '__main__':
     main()
