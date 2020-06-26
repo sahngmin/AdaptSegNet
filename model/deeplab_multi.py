@@ -27,7 +27,6 @@ def conv3x3(in_planes, out_planes, stride=1):
 
 class BasicBlock(nn.Module):
     expansion = 1
-
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
@@ -123,7 +122,7 @@ class Classifier_Module(nn.Module):
 
 
 class ResNetMulti(nn.Module):
-    def __init__(self, block, layers, num_classes):
+    def __init__(self, block, layers, num_classes, args):
         self.inplanes = 64
         super(ResNetMulti, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -132,7 +131,7 @@ class ResNetMulti(nn.Module):
         for i in self.bn1.parameters():
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
-
+        self.threshold = nn.Threshold(0.8, 0)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)  # change
 
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -142,7 +141,7 @@ class ResNetMulti(nn.Module):
         self.layer5 = self._make_pred_layer(Classifier_Module, 1024, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
-        self.WarpModel = Warper()
+        self.WarpModel = Warper(args=args)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -174,7 +173,7 @@ class ResNetMulti(nn.Module):
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, image, input_size, warping=False):
+    def forward(self, image, input_size, map=None, warping=False):
         x = self.conv1(image)
         x = self.bn1(x)
         x = self.relu(x)
@@ -190,8 +189,16 @@ class ResNetMulti(nn.Module):
 
         x1_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x1)
         x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
+
         if warping:
-            warper, warp_list = self.WarpModel(image)
+            if map is not None:
+                warper, warp_list = self.WarpModel(image, map)
+            else:
+                # x2_softmax = nn.Softmax()(x2_up)
+                # x2_filtered = self.threshold(x2_softmax)
+                # warper, warp_list = self.WarpModel(image, x2_filtered)
+                warper, warp_list = self.WarpModel(x2_up, None)
+
             x1_up = self.warp(x1_up, warper)
             x2_up = self.warp(x2_up, warper)
 
@@ -259,8 +266,8 @@ class ResNetMulti(nn.Module):
         return sampled
 
 
-def DeeplabMulti(num_classes=21):
-    model = ResNetMulti(Bottleneck, [3, 4, 23, 3], num_classes)
+def DeeplabMulti(num_classes=21, args=None):
+    model = ResNetMulti(Bottleneck, [3, 4, 23, 3], num_classes, args=args)
     return model
 
 

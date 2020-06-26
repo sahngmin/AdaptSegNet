@@ -34,7 +34,7 @@ class Connection(nn.Module):
 
 
 class SkipConnectionEncode(nn.Module):
-    def __init__(self, norm_layer="Batch", out_channel=512, num_layers=8):
+    def __init__(self, norm_layer="Batch", out_channel=512, num_layers=8, args=None):
         super(SkipConnectionEncode, self).__init__()
 
         if norm_layer == "Batch":
@@ -43,7 +43,11 @@ class SkipConnectionEncode(nn.Module):
 
         self.num_layers = num_layers
         down_list = list()
-        down_list.append(EncoderInput(3, 64, self.use_bias))
+        if args.feat_warp:
+            in_channel = 19
+        else:
+            in_channel = 3
+        down_list.append(EncoderInput(in_channel, 64, self.use_bias))
         down_list.append(DownConvolution(64, 128, self.use_bias, self.norm_layer))
         down_list.append(DownConvolution(128, 256, self.use_bias, self.norm_layer))
         down_list.append(DownConvolution(256, 512, self.use_bias, self.norm_layer))
@@ -215,7 +219,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
 
 class Warper(nn.Module):
     def __init__(self, norm='Batch', warp_channels=2, num_layers=8,
-                 use_dropout=False, transpose=False, warp_out=False, use_advanced=False):
+                 use_dropout=False, transpose=False, args=None):
         super(Warper, self).__init__()
 
         init_gain = 0.02
@@ -235,7 +239,7 @@ class Warper(nn.Module):
         driving_num_layers = num_layers - 1
         self.connection = init_weights(Connection(num_layers - 2, warp_channels), init_type, init_gain)
 
-        self.encoder_d = init_weights(SkipConnectionEncode(norm, 512, num_layers),
+        self.encoder_d = init_weights(SkipConnectionEncode(norm, 512, num_layers, args),
                                        init_type, init_gain)
         self.decoder_d = init_weights(SkipConnectionDecode(norm, 2, driving_num_layers, use_dropout, transpose),
                                        init_type, init_gain)
@@ -260,8 +264,10 @@ class Warper(nn.Module):
             warp_list_flip[i] = flipped_warper
         return warp_list_flip
 
-    def forward(self, pose, warper_flip=False):
-        latent_d, skip_connection = self.encoder_d(pose)
+    def forward(self, image, map=None, warper_flip=False):
+        if map is not None:
+            image = torch.cat((image, map), 1)
+        latent_d, skip_connection = self.encoder_d(image)
         warp_output, warp_list = self.decoder_d(latent_d, skip_connection)
 
         return warp_output, warp_list

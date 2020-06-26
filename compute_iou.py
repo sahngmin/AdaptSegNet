@@ -6,7 +6,7 @@ import random
 from PIL import Image
 from os.path import join
 
-SOURCE_ONLY = True
+SOURCE_ONLY = False
 LEVEL = 'single-level'
 
 SAVE_PRED_EVERY = 5000

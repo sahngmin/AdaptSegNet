@@ -91,7 +91,7 @@ def get_arguments():
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
     parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
-    parser.add_argument("--multi-gpu", action='store_false')
+    parser.add_argument("--multi-gpu", action='store_true')
     parser.add_argument("--warper", default=True)
 
     return parser.parse_args()
@@ -115,7 +115,7 @@ def main():
         os.makedirs(args.save)
 
     if args.model == 'DeeplabMulti':
-        model = DeeplabMulti(num_classes=args.num_classes)
+        model = DeeplabMulti(num_classes=args.num_classes, args=args)
     elif args.model == 'Oracle':
         model = Res_Deeplab(num_classes=args.num_classes)
         if args.restore_from == RESTORE_FROM:
