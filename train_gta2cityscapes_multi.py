@@ -324,9 +324,8 @@ def main():
             writer.close()
     else:
         if args.level == 'single-level':
-
+            model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
             if PRE_TRAINED is not None:
-                model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
                 saved_state_dict_disc = torch.load(PRE_TRAINED.replace('.pth', '_D.pth'), map_location=device)
                 model_D2.load_state_dict(saved_state_dict_disc)
 
