@@ -14,7 +14,7 @@ import os
 import os.path as osp
 import random
 from tensorboardX import SummaryWriter
-from model.deeplab_multi import DeeplabMulti
+from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
@@ -204,7 +204,8 @@ def main():
 
     # Create network
     if args.model == 'DeepLab':
-        model = DeeplabMulti(num_classes=args.num_classes, args=args)
+        model = Deeplab_DM(num_classes=args.num_classes, args=args)
+        model = Deeplab_DM(num_classes=args.num_classes, args=args)
         if PRE_TRAINED is not None:
             saved_state_dict_seg = torch.load(PRE_TRAINED, map_location=device)
             new_params = model.state_dict().copy()

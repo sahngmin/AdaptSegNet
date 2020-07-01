@@ -2,10 +2,12 @@
 *.pth
 *.png
 *.jpg
-#*.txt
+*.txt
 
 .idea/
 data/
+result/
+snapshots/
 python2_code/
 dataset/
 .DS_Store

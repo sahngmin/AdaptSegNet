@@ -7,10 +7,16 @@ from PIL import Image
 from os.path import join
 
 SOURCE_ONLY = False
-LEVEL = 'single-level'
+MEMORY = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS_STOP = 300000  # early stopping
+
+RANDOM_SEED = 1338
+
+dataset_dict = {'CityScapes': 1, 'Synthia': 2}
+TARGET = 'CityScapes'
+NUM_DATASET = dataset_dict[TARGET]
 
 def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
@@ -35,7 +41,6 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     with open(join(devkit_dir, 'info.json'), 'r') as fp:
       info = json.load(fp)
     num_classes = np.int(info['classes'])
-    # print('Num classes', num_classes)
     name_classes = np.array(info['label'], dtype=np.str)
     mapping = np.array(info['label2train'], dtype=np.int)
     hist = np.zeros((num_classes, num_classes))
@@ -66,7 +71,7 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
 
 
 def main(args):
-    seed = 1338
+    seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
@@ -77,28 +82,43 @@ def main(args):
         if SOURCE_ONLY:
             pred_dir = join(args.pred_dir, 'source_only', 'step' + str((files + 1) * args.save_pred_every))
         else:
-            if args.level == 'single-level':
+            if not args.memory:
                 pred_dir = join(args.pred_dir, 'single_level', 'step' + str((files + 1) * args.save_pred_every))
-            elif args.level == 'multi-level':
-                pred_dir = join(args.pred_dir, 'multi-level', 'step' + str((files + 1) * args.save_pred_every))
             else:
-                raise NotImplementedError('level choice {} is not implemented'.format(args.level))
+                targetlist = list(dataset_dict.keys())
+                foldername = 'GTA5to'
+                for i in range(args.num_dataset - 1):
+                    foldername += targetlist[i]
+                    foldername += 'to'
+                pred_dir = join(args.pred_dir, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every))
+
         compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
-    # compute_mIoU(args.gt_dir, args.pred_dir, args.devkit_dir)
+    # targetlist = list(dataset_dict.keys())
+    # foldername = 'GTA5to'
+    # for i in range(args.num_dataset - 1):
+    #     foldername += targetlist[i]
+    #     foldername += 'to'
+    # pred_dir = join(args.pred_dir, 'single_level_DM', foldername + str(args.target),
+    #                 'step' + str(190000))
+    # compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_dir', type=str, default='/work/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
+    parser.add_argument('--gt_dir', type=str, default='/home/joonhkim/UDA/datasets/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
     parser.add_argument('--pred_dir', type=str, default='./result/cityscapes', help='directory which stores CityScapes val pred images')
     parser.add_argument('--devkit_dir', default='dataset/cityscapes_list', help='base directory of cityscapes')
 
+    parser.add_argument("--target", type=str, default=TARGET,
+                        help="available options : cityscapes, synthia")
+    parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
     parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
                         help="Save summaries and checkpoint every often.")
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
-
-    parser.add_argument("--level", type=str, default=LEVEL, help="single-level/multi-level")
+    parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
+                        help="Random seed to have reproducible results.")
+    parser.add_argument("--memory", action='store_true', default=MEMORY)
 
     args = parser.parse_args()
     main(args)
