@@ -177,6 +177,10 @@ def get_arguments():
     parser.add_argument("--scale", action='store_true', default=SCALE)
     parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
     parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
+
+    parser.add_argument("--warper", default=True)
+    parser.add_argument("--feat_warp", default=True)
+
     return parser.parse_args()
 
 
@@ -220,7 +224,7 @@ def main():
     """Create the model and start the training."""
 
     # device = torch.device("cuda" if not args.cpu else "cpu")
-    device = torch.device("cuda:2" if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
     w, h = map(int, args.input_size.split(','))
     input_size = (w, h)
 
@@ -347,7 +351,7 @@ def main():
             else:  # load DeepLab trained on source domain
                 if args.restore_from_deeplab[:4] == 'http':
                     saved_state_dict = model_zoo.load_url(args.restore_from_deeplab)
-                else:
+                elif args.restore_from_deeplab is not None:
                     saved_state_dict = torch.load(args.restore_from_deeplab)
 
                 new_params = model.state_dict().copy()

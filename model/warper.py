@@ -13,7 +13,6 @@ import functools
 
 
 class Connection(nn.Module):
-
     def __init__(self, num_layers=6, warp_channels=2):
         super(Connection, self).__init__()
         self.num_layers = num_layers
@@ -237,7 +236,6 @@ class Warper(nn.Module):
         """
 
         driving_num_layers = num_layers - 1
-        self.connection = init_weights(Connection(num_layers - 2, warp_channels), init_type, init_gain)
 
         self.encoder_d = init_weights(SkipConnectionEncode(norm, 512, num_layers, args),
                                        init_type, init_gain)
