@@ -1,15 +1,15 @@
 import argparse
 import numpy as np
 
-MEMORY = False
+MEMORY = True
 SCALE = False
-FROM_SCRATCH = False
+FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 300000  # early stopping
+NUM_STEPS_STOP = 150000  # early stopping
 NUM_STEPS = 300000
 
-dataset_dict = {'CityScapes': 1, 'Synthia': 2}
+dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'
 SET = 'train'
 NUM_DATASET = dataset_dict[TARGET]
@@ -30,7 +30,6 @@ LAMBDA_MEMORY = [1.0]
 ALPHA = [0.25, 0.5]
 
 RANDOM_SEED = 1338
-
 
 MODEL = 'DeepLab'
 BATCH_SIZE = 1

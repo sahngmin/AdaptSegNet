@@ -81,7 +81,7 @@ def main():
 
     # Create network
     if SOURCE_ONLY:  # training model from pre-trained ResNet on source domain(GTA5)
-        model = Deeplab(num_classes=args.num_classes)
+        model = Deeplab(args=args)
 
         if args.restore_from_resnet[:4] == 'http':
             saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
@@ -189,7 +189,7 @@ def main():
             writer.close()
     else:
         if not args.memory:  # single-level alignment without DM
-            model = Deeplab(num_classes=args.num_classes)
+            model = Deeplab_DM(args=args)
             if args.from_scratch:  # load pretrained ResNet
                 if args.restore_from_resnet[:4] == 'http':
                     saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
@@ -268,7 +268,7 @@ def main():
 
             # implement model.optim_parameters(args) to handle different models' lr setting
 
-            optimizer = optim.SGD(model.optim_parameters(args, SOURCE_ONLY),
+            optimizer = optim.SGD(model.optim_parameters(args),
                                   lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
             optimizer.zero_grad()
 
@@ -320,7 +320,7 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    pred = model(images, input_size)
+                    pred_both, pred, pred_DM = model(images, input_size)
 
                     loss_seg = seg_loss(pred, labels)
                     loss = loss_seg
@@ -336,7 +336,7 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    pred_target = model(images, input_size_target)
+                    _, pred_target, _ = model(images, input_size_target)
 
                     D_out = model_D(F.softmax(pred_target, dim=1))
 
@@ -414,7 +414,7 @@ def main():
                 writer.close()
 
         else:  # single-level alignment with DM
-            model = Deeplab_DM(num_classes=args.num_classes, len_dataset=args.num_dataset, args=args)
+            model = Deeplab_DM(args=args)
 
             if args.num_dataset == 1:  # first domain
                 if args.from_scratch:  # load pretrained ResNet
@@ -499,7 +499,7 @@ def main():
                                                                  set=args.set),
                                                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                                pin_memory=True)
-            elif args.target == 'Synthia':  # SYNTHIA dataloader 필요!!!
+            elif args.target == 'Synthia':  # --------------------------------------------------------SYNTHIA dataloader 필요!!!
                 targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                                  max_iters=args.num_steps * args.iter_size * args.batch_size,
                                                                  crop_size=input_size_target,
@@ -569,14 +569,14 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    pred_both, pred_origin, pred_DM = model(images, input_size, args)
+                    pred_both, pred_origin, pred_DM = model(images, input_size)
 
                     loss_seg = seg_loss(pred_both, labels)
                     loss = loss_seg
                     loss_seg_value += loss_seg.item() / args.iter_size
 
                     if not args.num_dataset == 1:
-                        _, old_outputs, _ = ref_model(images, input_size, args)
+                        _, old_outputs, _ = ref_model(images, input_size)
                         loss_distillation = distillation_loss(pred_origin, old_outputs)
                         loss_memory = seg_loss(pred_DM, labels)
                         loss += args.lambda_distillation * loss_distillation + args.lambda_memory[args.num_dataset - 2] * loss_memory
@@ -593,7 +593,7 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    pred_both_target, _, pred_DM_target = model(images, input_size_target, args)
+                    pred_both_target, _, pred_DM_target = model(images, input_size_target)
 
                     D_out = model_D(F.softmax(pred_both_target, dim=1))
                     D_out_memory = model_D(F.softmax(pred_DM_target, dim=1))

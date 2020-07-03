@@ -232,7 +232,7 @@ class ResNet(nn.Module):
         return result
 
 
-def Deeplab(num_classes=21):
-    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes)
+def Deeplab(args):
+    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes)
     return model
 

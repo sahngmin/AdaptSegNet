@@ -197,6 +197,7 @@ class ResNet_DM(nn.Module):
         self.scale = args.scale
         self.memory = args.memory
         self.warper = args.warper
+        self.num_dataset = args.num_dataset
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
@@ -257,10 +258,10 @@ class ResNet_DM(nn.Module):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
 
-    def forward(self, image, input_size, args, map=None):
-        DM_name = 'DM' + str(args.num_dataset)
+    def forward(self, image, input_size, map=None):
+        DM_name = 'DM' + str(self.num_dataset)
         if self.scale:
-            scale_name = 'scale' + str(args.num_dataset)
+            scale_name = 'scale' + str(self.num_dataset)
         x = self.conv1(image)
         x = self.bn1(x)
         x = self.relu(x)
@@ -298,8 +299,13 @@ class ResNet_DM(nn.Module):
                 # x2_softmax = nn.Softmax()(x2_up)
                 # x2_filtered = self.threshold(x2_softmax)
                 # warper, warp_list = self.WarpModel(image, x2_filtered)
-                warper, warp_list = self.WarpModel(x_up, None)
-            x_up = self.warp(x_up, warper)
+                if self.memory:
+                    warper, warp_list = self.WarpModel(x_up, None)
+                    x_up = self.warp(x_up, warper)
+
+                else:
+                    warper, warp_list = self.WarpModel(output_ori, None)
+                    output_ori = self.warp(output_ori, warper)
 
         return x_up, output_ori, x3_up
 
@@ -350,29 +356,24 @@ class ResNet_DM(nn.Module):
             for i in b[j]:
                 yield i
 
-
-
     def optim_parameters(self, args):
         if args.num_dataset == 1:
-            if self.scale:
-                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                    {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
-                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate},
-                                    {'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
-            else:
-                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                    {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
-                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+            optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                                {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate}]
+
         else:
-            if self.scale:
-                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                    {'params': self.ASPP_params(), 'lr': args.learning_rate},
-                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate},
-                                    {'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
-            else:
-                optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                    {'params': self.ASPP_params(), 'lr': args.learning_rate},
-                                    {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+            optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
+                                {'params': self.ASPP_params(), 'lr': args.learning_rate}]
+
+        if self.memory:
+            optim_parameters += [{'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+
+        if self.scale:
+            optim_parameters += [{'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
+
+        if self.warper:
+            optim_parameters += [{'params': self.WarpModel.parameters(), 'lr': args.learning_rate}]
+
         return optim_parameters
 
 
@@ -396,8 +397,8 @@ class ResNet_DM(nn.Module):
         return sampled
 
 
-def Deeplab_DM(num_classes, len_dataset=None, args=None):
-    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes, args, len_dataset)
+def Deeplab_DM(args=None):
+    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset)
     return model
 
 
