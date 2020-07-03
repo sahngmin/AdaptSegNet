@@ -192,9 +192,11 @@ class DM(nn.Module):
 
 
 class ResNet_DM(nn.Module):
-    def __init__(self, block, layers, num_classes, len_dataset, args):
+    def __init__(self, block, layers, num_classes, args=None, len_dataset=None):
         super(ResNet_DM, self).__init__()
         self.scale = args.scale
+        self.memory = args.memory
+        self.warper = args.warper
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
@@ -202,9 +204,6 @@ class ResNet_DM(nn.Module):
         for i in self.bn1.parameters():
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
-
-        # self.threshold = nn.Threshold(0.8, 0)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)  # change
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -214,18 +213,20 @@ class ResNet_DM(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
-        self.WarpModel = Warper(args=args)
+        if args.warper:
+            self.WarpModel = Warper(args=args)
 
-        for num_dataset in range(len_dataset):
-            DM_name = 'DM' + str(num_dataset + 1)
-            setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
+        if args.memory:
+            for num_dataset in range(len_dataset):
+                DM_name = 'DM' + str(num_dataset + 1)
+                setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
 
-        # if self.scale:
-        #     scale = torch.randn(2048 + 3072).fill_(6000)
-        #     scale[:2048] *= args.alpha[len_dataset - 1]
-        #     for num_dataset in range(len_dataset):
-        #         scale_name = 'scale' + str(num_dataset + 1)
-        #         setattr(self, scale_name, nn.Parameter(scale.cuda(), requires_grad=True))
+            # if self.scale:
+            #     scale = torch.randn(2048 + 3072).fill_(6000)
+            #     scale[:2048] *= args.alpha[len_dataset - 1]
+            #     for num_dataset in range(len_dataset):
+            #         scale_name = 'scale' + str(num_dataset + 1)
+            #         setattr(self, scale_name, nn.Parameter(scale.cuda(), requires_grad=True))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -256,7 +257,7 @@ class ResNet_DM(nn.Module):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
 
-    def forward(self, image, input_size, args, map=None, warping=False):
+    def forward(self, image, input_size, args, map=None):
         DM_name = 'DM' + str(args.num_dataset)
         if self.scale:
             scale_name = 'scale' + str(args.num_dataset)
@@ -269,25 +270,28 @@ class ResNet_DM(nn.Module):
         x = self.layer3(x)
 
         x1 = self.layer4(x)
+
         if self.scale:  ### normalizing and scaling
             # print(torch.norm(x1[0], p=2, dim=[1,2,3]))
             x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3], keepdim=True))
             x1[0] = getattr(self, scale_name)[:2048].reshape(1, 2048, 1, 1) * x1[0]
 
         x2 = self.layer6(x1[0])
-        x2_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
+        output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
-        x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
-        if self.scale:  ### normalizing and scaling
-            # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
-            x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3], keepdim=True))
-            x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
+        x_up, x3_up = None, None
+        if self.memory:
+            x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
+            if self.scale:  ### normalizing and scaling
+                # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
+                x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3], keepdim=True))
+                x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
 
-        x3 = getattr(self, DM_name)(x3)
-        x3_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x3)  # ResNet + DM
-        x_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2 + x3)  # ResNet + (ASPP+DM)
+            x3 = getattr(self, DM_name)(x3)
+            x3_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x3)  # ResNet + DM
+            x_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2 + x3)  # ResNet + (ASPP+DM)
 
-        if warping:
+        if self.warper:
             if map is not None:
                 warper, warp_list = self.WarpModel(image, map)
             else:
@@ -295,9 +299,9 @@ class ResNet_DM(nn.Module):
                 # x2_filtered = self.threshold(x2_softmax)
                 # warper, warp_list = self.WarpModel(image, x2_filtered)
                 warper, warp_list = self.WarpModel(x_up, None)
+            x_up = self.warp(x_up, warper)
 
-            x_up = self.warp(x2 + x3, warper)
-        return x_up, x2_up, x3_up
+        return x_up, output_ori, x3_up
 
 
     def ResNet_params(self):
@@ -392,8 +396,8 @@ class ResNet_DM(nn.Module):
         return sampled
 
 
-def Deeplab_DM(num_classes, len_dataset, args):
-    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes, len_dataset, args)
+def Deeplab_DM(num_classes, len_dataset=None, args=None):
+    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes, args, len_dataset)
     return model
 
 

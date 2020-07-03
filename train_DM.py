@@ -15,176 +15,22 @@ import os.path as osp
 import random
 from tensorboardX import SummaryWriter
 import copy
-
+from options import TrainOptions, dataset_dict
 from model.deeplab_DM import Deeplab_DM
 from model.deeplab import Deeplab
 from model.discriminator import FCDiscriminator
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
+from utils.tsne_plot import TSNE_plot
+
 
 SOURCE_ONLY = False
-MEMORY = True
-SCALE = False
-FROM_SCRATCH = True
-
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 300000  # early stopping
-NUM_STEPS = 300000
-
-dataset_dict = {'CityScapes': 1, 'Synthia': 2}
-TARGET = 'CityScapes'
-SET = 'train'
-NUM_DATASET = dataset_dict[TARGET]
-
-LEARNING_RATE = 2.5e-4
-MOMENTUM = 0.9
-WEIGHT_DECAY = 0.0005
-POWER = 0.9
-
-LEARNING_RATE_D = 1e-4
-
-GAN = 'LS'
-
-LAMBDA_ADV_TARGET = [0.002, 0.003]
-LAMBDA_ADV_MEMORY = [0.0015, 0.003]
-LAMBDA_DISTILLATION = 0.1
-LAMBDA_MEMORY = [1.0]
-ALPHA = [0.25, 0.5]
-
-RANDOM_SEED = 1338
+PRE_TRAINED_SEG = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model.pth'
+PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
-MODEL = 'DeepLab'
-BATCH_SIZE = 1
-ITER_SIZE = 1
-NUM_WORKERS = 4
-# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
-# DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
-# DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
-IGNORE_LABEL = 255
-INPUT_SIZE = '1024,512'
-# DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-# DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
-# DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
-DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
-INPUT_SIZE_TARGET = '1024,512'
-
-NUM_CLASSES = 19
-
-# RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
-
-RESTORE_FROM_DEEPLAB = './snapshots/source_only/GTA5_best_model.pth'
-RESTORE_FROM_PREVDOMAIN = './snapshots/single_level_DM/GTA5toCityScapes_best_model.pth'
-
-PRE_TRAINED = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model.pth'
-
-SAVE_NUM_IMAGES = 2
-
-SNAPSHOT_DIR = './snapshots/'
-LOG_DIR = './log'
-
-
-def get_arguments():
-    """Parse all the arguments provided from the CLI.
-
-    Returns:
-      A list of parsed arguments.
-    """
-    parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
-    parser.add_argument("--model", type=str, default=MODEL,
-                        help="available options : DeepLab")
-    parser.add_argument("--target", type=str, default=TARGET,
-                        help="available options : CityScapes, Synthia")
-    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
-                        help="Number of images sent to the network in one step.")
-    parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
-                        help="Accumulate gradients for ITER_SIZE iterations.")
-    parser.add_argument("--num-workers", type=int, default=NUM_WORKERS,
-                        help="number of workers for multithread dataloading.")
-    parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
-                        help="Path to the directory containing the source dataset.")
-    parser.add_argument("--data-list", type=str, default=DATA_LIST_PATH,
-                        help="Path to the file listing the images in the source dataset.")
-    parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
-                        help="The index of the label to ignore during the training.")
-    parser.add_argument("--input-size", type=str, default=INPUT_SIZE,
-                        help="Comma-separated string with height and width of source images.")
-    parser.add_argument("--data-dir-target", type=str, default=DATA_DIRECTORY_TARGET,
-                        help="Path to the directory containing the target dataset.")
-    parser.add_argument("--data-list-target", type=str, default=DATA_LIST_PATH_TARGET,
-                        help="Path to the file listing the images in the target dataset.")
-    parser.add_argument("--input-size-target", type=str, default=INPUT_SIZE_TARGET,
-                        help="Comma-separated string with height and width of target images.")
-    parser.add_argument("--is-training", action="store_true",
-                        help="Whether to updates the running means and variances during the training.")
-    parser.add_argument("--learning-rate", type=float, default=LEARNING_RATE,
-                        help="Base learning rate for training with polynomial decay.")
-    parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
-                        help="Base learning rate for discriminator.")
-    parser.add_argument("--lambda-adv-target", type=list, default=LAMBDA_ADV_TARGET,
-                        help="lambda_adv for adversarial training.")
-    parser.add_argument("--lambda-adv-memory", type=list, default=LAMBDA_ADV_MEMORY,
-                        help="lambda_adv for adversarial training.")
-    parser.add_argument("--lambda-memory", type=list, default=LAMBDA_MEMORY)
-    parser.add_argument("--lambda-distillation", type=float, default=LAMBDA_DISTILLATION)
-    parser.add_argument("--alpha", type=list, default=ALPHA)
-    parser.add_argument("--momentum", type=float, default=MOMENTUM,
-                        help="Momentum component of the optimiser.")
-    parser.add_argument("--not-restore-last", action="store_true",
-                        help="Whether to not restore last (FC) layers.")
-    parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
-                        help="Number of classes to predict (including background).")
-    parser.add_argument("--num-steps", type=int, default=NUM_STEPS,
-                        help="Number of training steps.")
-    parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
-                        help="Number of training steps for early stopping.")
-    parser.add_argument("--power", type=float, default=POWER,
-                        help="Decay parameter to compute the learning rate.")
-    parser.add_argument("--random-mirror", action="store_true",
-                        help="Whether to randomly mirror the inputs during the training.")
-    parser.add_argument("--random-scale", action="store_true",
-                        help="Whether to randomly scale the inputs during the training.")
-    parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
-                        help="Random seed to have reproducible results.")
-    parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
-                        help="Where restore model parameters from.")
-    parser.add_argument("--restore-from-deeplab", type=str, default=RESTORE_FROM_DEEPLAB,
-                        help="Where restore model parameters from.")
-    parser.add_argument("--restore-from-prevdomain", type=str, default=RESTORE_FROM_PREVDOMAIN,
-                        help="Where restore model parameters from.")
-    parser.add_argument("--save-num-images", type=int, default=SAVE_NUM_IMAGES,
-                        help="How many images to save.")
-    parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
-                        help="Save summaries and checkpoint every often.")
-    parser.add_argument("--snapshot-dir", type=str, default=SNAPSHOT_DIR,
-                        help="Where to save snapshots of the model.")
-    parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
-                        help="Regularisation parameter for L2-loss.")
-    parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
-    parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.")
-    parser.add_argument("--log-dir", type=str, default=LOG_DIR,
-                        help="Path to the directory of log.")
-    parser.add_argument("--set", type=str, default=SET,
-                        help="choose adaptation set.")
-    parser.add_argument("--gan", type=str, default=GAN,
-                        help="choose the GAN objective.")
-    parser.add_argument("--memory", action='store_true', default=MEMORY)
-    parser.add_argument("--scale", action='store_true', default=SCALE)
-    parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
-    parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
-
-    parser.add_argument("--warper", default=True)
-    parser.add_argument("--feat_warp", default=True)
-
-    return parser.parse_args()
-
-
-args = get_arguments()
+args = TrainOptions().parse()
 
 
 def lr_poly(base_lr, iter, max_iter, power):
@@ -236,6 +82,7 @@ def main():
     # Create network
     if SOURCE_ONLY:  # training model from pre-trained ResNet on source domain(GTA5)
         model = Deeplab(num_classes=args.num_classes)
+
         if args.restore_from_resnet[:4] == 'http':
             saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
         else:
@@ -248,6 +95,14 @@ def main():
             if not i_parts[1] == 'layer5':
                 new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
         model.load_state_dict(new_params)
+
+        if PRE_TRAINED_SEG is not None:
+            saved_state_dict_seg = torch.load(PRE_TRAINED_SEG, map_location=device)
+            new_params = model.state_dict().copy()
+            for i in saved_state_dict_seg:
+                if i in new_params.keys():
+                    new_params[i] = saved_state_dict_seg[i]
+            model.load_state_dict(new_params)
 
         model.train()
         model.to(device)
@@ -348,6 +203,15 @@ def main():
                     if not i_parts[1] == 'layer5':
                         new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
                 model.load_state_dict(new_params)
+
+            elif PRE_TRAINED_SEG is not None:
+                saved_state_dict_seg = torch.load(PRE_TRAINED_SEG, map_location=device)
+                new_params = model.state_dict().copy()
+                for i in saved_state_dict_seg:
+                    if i in new_params.keys():
+                        new_params[i] = saved_state_dict_seg[i]
+                model.load_state_dict(new_params)
+
             else:  # load DeepLab trained on source domain
                 if args.restore_from_deeplab[:4] == 'http':
                     saved_state_dict = model_zoo.load_url(args.restore_from_deeplab)
@@ -369,6 +233,15 @@ def main():
 
             # init D
             model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+
+            if PRE_TRAINED_DISC is not None:
+                saved_state_dict_seg = torch.load(PRE_TRAINED_DISC, map_location=device)
+                new_params = model_D.state_dict().copy()
+                for i in saved_state_dict_seg:
+                    if i in new_params.keys():
+                        new_params[i] = saved_state_dict_seg[i]
+                model_D.load_state_dict(new_params)
+
             model_D.train()
             model_D.to(device)
 
@@ -556,6 +429,15 @@ def main():
                         if not i_parts[1] == 'layer5':
                             new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
                     model.load_state_dict(new_params)
+
+                elif PRE_TRAINED_SEG is not None:
+                    saved_state_dict_seg = torch.load(PRE_TRAINED_SEG, map_location=device)
+                    new_params = model.state_dict().copy()
+                    for i in saved_state_dict_seg:
+                        if i in new_params.keys():
+                            new_params[i] = saved_state_dict_seg[i]
+                    model.load_state_dict(new_params)
+
                 else:  # load DeepLab trained on source domain
                     saved_state_dict = torch.load(args.restore_from_deeplab)
                     new_params = model.state_dict().copy()
@@ -586,6 +468,15 @@ def main():
 
             # init D
             model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+
+            if PRE_TRAINED_DISC is not None:
+                saved_state_dict_seg = torch.load(PRE_TRAINED_DISC, map_location=device)
+                new_params = model_D.state_dict().copy()
+                for i in saved_state_dict_seg:
+                    if i in new_params.keys():
+                        new_params[i] = saved_state_dict_seg[i]
+                model_D.load_state_dict(new_params)
+
             model_D.train()
             model_D.to(device)
 
