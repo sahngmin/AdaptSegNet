@@ -280,7 +280,7 @@ class ResNet_DM(nn.Module):
         x2 = self.layer6(x1[0])
         output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
-        x_up, x3_up = None, None
+        x_up, x3_up, output_ori_warped = None, None, None
         if self.memory:
             x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
             if self.scale:  ### normalizing and scaling
@@ -301,13 +301,12 @@ class ResNet_DM(nn.Module):
                 # warper, warp_list = self.WarpModel(image, x2_filtered)
                 if self.memory:
                     warper, warp_list = self.WarpModel(x_up, None)
-                    x_up = self.warp(x_up, warper)
-
+                    x_up_warped = self.warp(x_up, warper)
+                    return x_up_warped, output_ori, x3_up, x_up
                 else:
                     warper, warp_list = self.WarpModel(output_ori, None)
-                    output_ori = self.warp(output_ori, warper)
-
-        return x_up, output_ori, x3_up
+                    output_ori_warped = self.warp(output_ori, warper)
+                    return x_up, output_ori_warped, x3_up, output_ori
 
 
     def ResNet_params(self):
@@ -356,7 +355,7 @@ class ResNet_DM(nn.Module):
             for i in b[j]:
                 yield i
 
-    def optim_parameters(self, args):
+    def parameters_seg(self, args):
         if args.num_dataset == 1:
             optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
                                 {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate}]
@@ -371,11 +370,11 @@ class ResNet_DM(nn.Module):
         if self.scale:
             optim_parameters += [{'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
 
-        if self.warper:
-            optim_parameters += [{'params': self.WarpModel.parameters(), 'lr': args.learning_rate}]
-
         return optim_parameters
 
+    def parameters_warp(self, args):
+        optim_parameters = [{'params': self.WarpModel.parameters(), 'lr': 10 * args.learning_rate}]
+        return optim_parameters
 
     @staticmethod
     def warp(input, warper):

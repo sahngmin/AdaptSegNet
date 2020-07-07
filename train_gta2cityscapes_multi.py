@@ -204,7 +204,7 @@ def main():
 
     # Create network
     if args.model == 'DeepLab':
-        model = Deeplab_DM(num_classes=args.num_classes, args=args)
+        model = Deeplab_DM(args=args)
         if PRE_TRAINED is not None:
             saved_state_dict_seg = torch.load(PRE_TRAINED, map_location=device)
             new_params = model.state_dict().copy()

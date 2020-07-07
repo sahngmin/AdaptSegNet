@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 
-MEMORY = True
+MEMORY = False
 SCALE = False
 FROM_SCRATCH = True
 

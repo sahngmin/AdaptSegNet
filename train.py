@@ -122,7 +122,7 @@ def main():
 
         # implement model.optim_parameters(args) to handle different models' lr setting
 
-        optimizer = optim.SGD(model.optim_parameters(args, SOURCE_ONLY),
+        optimizer = optim.SGD(model.parameters_seg(args, SOURCE_ONLY),
                               lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
         optimizer.zero_grad()
 
@@ -152,9 +152,9 @@ def main():
                 images = images.to(device)
                 labels = labels.long().to(device)
 
-                pred = model(images, input_size)
+                pred_warped = model(images, input_size)
 
-                loss_seg = seg_loss(pred, labels)
+                loss_seg = seg_loss(pred_warped, labels)
                 loss = loss_seg
 
                 # proper normalization
@@ -268,12 +268,16 @@ def main():
 
             # implement model.optim_parameters(args) to handle different models' lr setting
 
-            optimizer = optim.SGD(model.optim_parameters(args),
+            optimizer = optim.SGD(model.parameters_seg(args),
                                   lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
             optimizer.zero_grad()
 
             optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
             optimizer_D.zero_grad()
+
+            if args.warper:
+                optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
+                optimizer_warp.zero_grad()
 
             if args.gan == 'Vanilla':
                 bce_loss = torch.nn.BCEWithLogitsLoss()
@@ -301,6 +305,10 @@ def main():
                 optimizer.zero_grad()
                 adjust_learning_rate(optimizer, i_iter, args)
 
+                if args.warper:
+                    optimizer_warp.zero_grad()
+                    adjust_learning_rate(optimizer_warp, i_iter, args)
+
                 optimizer_D.zero_grad()
                 adjust_learning_rate_D(optimizer_D, i_iter)
 
@@ -320,15 +328,14 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    pred_both, pred, pred_DM = model(images, input_size)
-
-                    loss_seg = seg_loss(pred, labels)
-                    loss = loss_seg
+                    pred_both, pred_warped, pred_DM, pred_ori = model(images, input_size)
 
                     # proper normalization
-                    loss = loss / args.iter_size
-                    loss.backward()
-                    loss_seg_value += loss_seg.item() / args.iter_size
+                    loss_seg_ori = seg_loss(pred_ori, labels)
+                    loss_seg_ori = loss_seg_ori / args.iter_size
+                    loss_seg_ori.backward(retain_graph=True)
+
+                    loss_seg_value += loss_seg_ori.item()
 
                     # train with target
 
@@ -336,7 +343,7 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    _, pred_target, _ = model(images, input_size_target)
+                    _, pred_target, _, _ = model(images, input_size_target)
 
                     D_out = model_D(F.softmax(pred_target, dim=1))
 
@@ -355,9 +362,9 @@ def main():
                         param.requires_grad = True
 
                     # train with source
-                    pred = pred.detach()
+                    pred_ori = pred_ori.detach()
 
-                    D_out = model_D(F.softmax(pred, dim=1))
+                    D_out = model_D(F.softmax(pred_ori, dim=1))
 
                     loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                     loss_D = loss_D / args.iter_size / 2
@@ -380,6 +387,12 @@ def main():
 
                 optimizer.step()
                 optimizer_D.step()
+
+                if args.warper:
+                    loss_seg = seg_loss(pred_warped, labels)
+                    loss_seg.backward()
+
+                    optimizer_warp.step()
 
                 if args.tensorboard:
                     scalar_info = {
@@ -514,12 +527,16 @@ def main():
 
             # implement model.optim_parameters(args) to handle different models' lr setting
 
-            optimizer = optim.SGD(model.optim_parameters(args),
+            optimizer = optim.SGD(model.parameters_seg(args),
                                   lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
             optimizer.zero_grad()
 
             optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
             optimizer_D.zero_grad()
+
+            if args.warper:
+                optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
+                optimizer_warp.zero_grad()
 
             if args.gan == 'Vanilla':
                 bce_loss = torch.nn.BCEWithLogitsLoss()
@@ -553,6 +570,10 @@ def main():
                 optimizer_D.zero_grad()
                 adjust_learning_rate_D(optimizer_D, i_iter)
 
+                if args.warper:
+                    optimizer_warp.zero_grad()
+                    adjust_learning_rate(optimizer_warp, i_iter, args)
+
                 for sub_i in range(args.iter_size):
 
                     # train G
@@ -569,7 +590,7 @@ def main():
                     images = images.to(device)
                     labels = labels.long().to(device)
 
-                    pred_both, pred_origin, pred_DM = model(images, input_size)
+                    pred_both_warped, pred_warped, pred_DM, pred_both = model(images, input_size)
 
                     loss_seg = seg_loss(pred_both, labels)
                     loss = loss_seg
@@ -577,7 +598,7 @@ def main():
 
                     if not args.num_dataset == 1:
                         _, old_outputs, _ = ref_model(images, input_size)
-                        loss_distillation = distillation_loss(pred_origin, old_outputs)
+                        loss_distillation = distillation_loss(pred_both, old_outputs)
                         loss_memory = seg_loss(pred_DM, labels)
                         loss += args.lambda_distillation * loss_distillation + args.lambda_memory[args.num_dataset - 2] * loss_memory
 
@@ -585,7 +606,7 @@ def main():
                         loss_memory_value += loss_memory.item() / args.iter_size
 
                     loss = loss / args.iter_size
-                    loss.backward()
+                    loss.backward(retain_graph=True)
 
                     # train with target
 
@@ -593,7 +614,7 @@ def main():
                     images, _, _ = batch
                     images = images.to(device)
 
-                    pred_both_target, _, pred_DM_target = model(images, input_size_target)
+                    pred_both_target_warped, _, pred_DM_target, pred_both_target = model(images, input_size_target)
 
                     D_out = model_D(F.softmax(pred_both_target, dim=1))
                     D_out_memory = model_D(F.softmax(pred_DM_target, dim=1))
@@ -618,9 +639,9 @@ def main():
                         param.requires_grad = True
 
                     # train with source
-                    pred = pred_both.detach()
+                    pred_warped = pred_both.detach()
 
-                    D_out = model_D(F.softmax(pred, dim=1))
+                    D_out = model_D(F.softmax(pred_warped, dim=1))
 
                     loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                     loss_D = loss_D / args.iter_size / 2
@@ -643,6 +664,11 @@ def main():
 
                 optimizer.step()
                 optimizer_D.step()
+
+                if args.warper:
+                    loss_seg = seg_loss(pred_both_warped, labels)
+                    loss_seg.backward()
+                    optimizer_warp.step()
 
                 if args.tensorboard:
                     scalar_info = {
