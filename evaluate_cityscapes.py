@@ -21,7 +21,7 @@ from PIL import Image
 
 SOURCE_ONLY = False
 MEMORY = True
-WARPER = True
+WARPER = False
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
