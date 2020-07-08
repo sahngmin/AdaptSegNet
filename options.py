@@ -1,13 +1,13 @@
 import argparse
-import numpy as np
 
-MEMORY = False
-SCALE = False
+SOURCE_ONLY = False
+MEMORY = True
+WARPER = True
 FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
-NUM_STEPS = 300000
+NUM_STEPS = 150000
 
 dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'
@@ -23,11 +23,8 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'LS'
 
-LAMBDA_ADV_TARGET = [0.002, 0.003]
-LAMBDA_ADV_MEMORY = [0.0015, 0.003]
+LAMBDA_ADV_TARGET = [0.002, 0.002]
 LAMBDA_DISTILLATION = 0.1
-LAMBDA_MEMORY = [1.0]
-ALPHA = [0.25, 0.5]
 
 RANDOM_SEED = 1338
 
@@ -36,27 +33,23 @@ BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
-# DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+DATA_DIRECTORY = '/work/GTA5'
+# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
 # DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-# DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+DATA_DIRECTORY_TARGET = '/work/CityScapes'
+# DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
 # DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
 NUM_CLASSES = 19
 
-# RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
-
-RESTORE_FROM_DEEPLAB = './snapshots/source_only/GTA5_best_model.pth'
-RESTORE_FROM_PREVDOMAIN = './snapshots/single_level_DM/GTA5toCityScapes_best_model.pth'
-
+RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+# RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
 SAVE_NUM_IMAGES = 2
 
@@ -114,11 +107,7 @@ class TrainOptions(BaseOptions):
                             help="Base learning rate for discriminator.")
         self.parser.add_argument("--lambda-adv-target", type=list, default=LAMBDA_ADV_TARGET,
                             help="lambda_adv for adversarial training.")
-        self.parser.add_argument("--lambda-adv-memory", type=list, default=LAMBDA_ADV_MEMORY,
-                            help="lambda_adv for adversarial training.")
-        self.parser.add_argument("--lambda-memory", type=list, default=LAMBDA_MEMORY)
         self.parser.add_argument("--lambda-distillation", type=float, default=LAMBDA_DISTILLATION)
-        self.parser.add_argument("--alpha", type=list, default=ALPHA)
         self.parser.add_argument("--momentum", type=float, default=MOMENTUM,
                             help="Momentum component of the optimiser.")
         self.parser.add_argument("--not-restore-last", action="store_true",
@@ -139,10 +128,6 @@ class TrainOptions(BaseOptions):
                             help="Random seed to have reproducible results.")
         self.parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
                             help="Where restore model parameters from.")
-        self.parser.add_argument("--restore-from-deeplab", type=str, default=RESTORE_FROM_DEEPLAB,
-                            help="Where restore model parameters from.")
-        self.parser.add_argument("--restore-from-prevdomain", type=str, default=RESTORE_FROM_PREVDOMAIN,
-                            help="Where restore model parameters from.")
         self.parser.add_argument("--save-num-images", type=int, default=SAVE_NUM_IMAGES,
                             help="How many images to save.")
         self.parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
@@ -159,10 +144,9 @@ class TrainOptions(BaseOptions):
                             help="choose adaptation set.")
         self.parser.add_argument("--gan", type=str, default=GAN,
                             help="choose the GAN objective.")
+        self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
         self.parser.add_argument("--memory", action='store_true', default=MEMORY)
-        self.parser.add_argument("--scale", action='store_true', default=SCALE)
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
         self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
-
-        self.parser.add_argument("--warper", default=True)
-        self.parser.add_argument("--feat_warp", default=True)
+        self.parser.add_argument("--warper", action='store_true', default=WARPER)
+        self.parser.add_argument("--feat-warp", default=True)

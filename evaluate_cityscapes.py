@@ -6,6 +6,7 @@ import sys
 import random
 
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
 import torchvision.models as models
 import torch.nn.functional as F
@@ -15,36 +16,33 @@ from model.deeplab_DM import Deeplab_DM
 from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
+import os.path as osp
 from PIL import Image
 
-import torch.nn as nn
-
 SOURCE_ONLY = False
+MEMORY = True
+WARPER = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
 
-IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
+IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
-DATA_DIRECTORY = '/home/aiwc/Datasets/CityScapes'
-DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/CityScapes'
+DATA_DIRECTORY = '/work/CityScapes'
+# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+# DATA_DIRECTORY = '/home/aiwc/Datasets/CityScapes'
 
-MEMORY = True
-SCALE = False
-
-dataset_dict = {'CityScapes': 1, 'Synthia': 2}
+dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'
 NUM_DATASET = dataset_dict[TARGET]
-TARGET_SIZE = '2048,1024'
-
-ALPHA = [0.25, 0.5]
-
 
 DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
-SAVE_PATH = './result/cityscapes'
+SAVE_PATH = './result'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
+BATCH_SIZE = 1
 NUM_STEPS = 500 # Number of images in the validation set.
 
 SET = 'val'
@@ -74,8 +72,6 @@ def get_arguments():
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
     parser.add_argument("--target", type=str, default=TARGET,
                         help="available options : Cityscapes, Synthia")
-    parser.add_argument("--target-size", type=str, default=TARGET_SIZE,
-                        help="Comma-separated string with height and width of target images.")
     parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
                         help="Path to the directory containing the Cityscapes dataset.")
     parser.add_argument("--data-list", type=str, default=DATA_LIST_PATH,
@@ -84,26 +80,25 @@ def get_arguments():
                         help="The index of the label to ignore during the training.")
     parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
                         help="Number of classes to predict (including background).")
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
+                             help="Number of images sent to the network in one step.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
     parser.add_argument("--save", type=str, default=SAVE_PATH,
                         help="Path to save result.")
-    parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
-
     parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
                         help="Save summaries and checkpoint every often.")
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
                         help="Number of training steps for early stopping.")
 
-    parser.add_argument("--multi-gpu", action='store_true')
-    parser.add_argument("--warper", default=True)
-
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
     parser.add_argument("--memory", action='store_true', default=MEMORY)
     parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
-    parser.add_argument("--scale", action='store_true', default=SCALE)
-    parser.add_argument("--alpha", type=list, default=ALPHA)
+    parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
+    parser.add_argument("--warper", action='store_true', default=WARPER)
+    parser.add_argument("--feat-warp", default=True)
+
 
     return parser.parse_args()
 
@@ -117,74 +112,85 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-
     input_size = [1024, 512]
 
     """Create the model and start the evaluation process."""
 
     args = get_arguments()
 
-    w, h = map(int, args.target_size.split(','))
-    target_size = (w, h)
-
     if not os.path.exists(args.save):
         os.makedirs(args.save)
 
-
-    # if args.restore_from[:4] == 'http' :
-    #     saved_state_dict = model_zoo.load_url(args.restore_from)
-    # else:
-    #     saved_state_dict = torch.load(args.restore_from)
-
+    model = Deeplab_DM(args=args)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
-        if SOURCE_ONLY:
-            model = Deeplab(num_classes=args.num_classes)
-            saved_state_dict = torch.load('./snapshots/source_only/GTA5_' + str((files + 1) * args.save_pred_every) + '.pth')
-            new_params = model.state_dict().copy()
-            for i in saved_state_dict:
-                # layer5.conv2d_list.3.weight
-                i_parts = i.split('.')
-                if not i_parts[0] == 'layer5':
-                    new_params[i] = saved_state_dict[i]
-            model.load_state_dict(new_params)
-        else:
-            if not args.memory:
-                model = Deeplab(num_classes=args.num_classes)
-                saved_state_dict = torch.load('./snapshots/single_level/GTA5toCityScapes' + str((files + 1) * args.save_pred_every) + '.pth')
-                new_params = model.state_dict().copy()
-                for i in saved_state_dict:
-                    # layer5.conv2d_list.3.weight
-                    i_parts = i.split('.')
-                    if not i_parts[0] == 'layer5':
-                        new_params[i] = saved_state_dict[i]
-                model.load_state_dict(new_params)
+
+        if args.source_only:
+            if args.warper and args.memory:
+                saved_state_dict = torch.load('./snapshots/source_only_warp_DM/GTA5_'
+                                              + str((files + 1) * args.save_pred_every) + '.pth')
+            elif args.warper:
+                saved_state_dict = torch.load('./snapshots/source_only_warp/GTA5_'
+                                              + str((files + 1) * args.save_pred_every) + '.pth')
+            elif args.memory:
+                saved_state_dict = torch.load('./snapshots/source_only_DM/GTA5_'
+                                              + str((files + 1) * args.save_pred_every) + '.pth')
             else:
-                model = Deeplab_DM(num_classes=args.num_classes, len_dataset=args.num_dataset, args=args)
+                saved_state_dict = torch.load('./snapshots/source_only/GTA5_'
+                                              + str((files + 1) * args.save_pred_every) + '.pth')
+        else:
+            if args.num_dataset == 1:
+                if args.warper and args.memory:
+                    saved_state_dict = torch.load('./snapshots/single_alignment_warp_DM/' + 'GTA5to' + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+                elif args.warper:
+                    saved_state_dict = torch.load('./snapshots/single_alignment_warp/' + 'GTA5to' + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+                elif args.memory:
+                    saved_state_dict = torch.load('./snapshots/single_alignment_DM/' + 'GTA5to' + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+                else:
+                    saved_state_dict = torch.load('./snapshots/single_alignment/' + 'GTA5to' + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+            else:
                 targetlist = list(dataset_dict.keys())
                 filename = 'GTA5to'
                 for i in range(args.num_dataset - 1):
                     filename += targetlist[i]
                     filename += 'to'
-                saved_state_dict = torch.load('./snapshots/single_level_DM/' + filename + str(args.target) + str((files + 1) * args.save_pred_every) + '.pth')
-                new_params = model.state_dict().copy()
-                for i in saved_state_dict:
-                    new_params[i] = saved_state_dict[i]
-                model.load_state_dict(new_params)
+                if args.warper and args.memory:
+                    saved_state_dict = torch.load('./snapshots/single_alignment_warp_DM/' + filename + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+                elif args.warper:
+                    saved_state_dict = torch.load('./snapshots/single_alignment_warp/' + filename + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+                elif args.memory:
+                    saved_state_dict = torch.load('./snapshots/single_alignment_DM/' + filename + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
+                else:
+                    saved_state_dict = torch.load('./snapshots/single_alignment/' + filename + str(args.target)
+                                                  + str((files + 1) * args.save_pred_every) + '.pth')
 
-        # device = torch.device("cuda" if not args.cpu else "cpu")
-        device = torch.device("cuda:2" if torch.cuda.is_available() else 'cpu')
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            if i in new_params.keys():
+                new_params[i] = saved_state_dict[i]
+        model.load_state_dict(new_params)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
 
         model.eval()
         if args.target == 'CityScapes':
-            testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
-                                            batch_size=1, shuffle=False, pin_memory=True)
+            testloader = data.DataLoader(
+                cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
+                                  mirror=False, set=args.set),
+                                  batch_size=1, shuffle=False, pin_memory=True)
         elif args.target == 'Synthia': #SYNTHIA dataloader 필요!!!---------------------------------------------------------------------------------------------
             testloader = data.DataLoader(
                 cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
                                   mirror=False, set=args.set),
-                batch_size=1, shuffle=False, pin_memory=True)
+                                  batch_size=1, shuffle=False, pin_memory=True)
         else:
             raise NotImplementedError('Unavailable target domain')
 
@@ -195,50 +201,31 @@ def main():
             image, _, name = batch
             image = image.to(device)
 
-            # debugging need
-            output1, output2, _ = model(image, input_size, warping=args.warper)
-            output = output2.cpu().data[0].numpy()
+            if args.warper and args.memory:
+                output, _, _, _ = model(image, input_size)
+            elif args.warper:
+                _, output, _, _ = model(image, input_size)
+            elif args.memory:
+                _, _, output, _ = model(image, input_size)
+            else:
+                _, _, _, output = model(image, input_size)
+            output = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(output)
 
+            output = output.cpu().data[0].numpy()
 
-            output = output.transpose(1,2,0)
+            output = output.transpose(1, 2, 0)
             output = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
 
             output_col = colorize_mask(output)
             output = Image.fromarray(output)
 
             name = name[0].split('/')[-1]
-            if SOURCE_ONLY:
-                if not os.path.exists(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every))):
-                    os.makedirs(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every)))
-                output.save(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every), name))
-                output_col.save(os.path.join(args.save, 'source_only', 'step' + str((files + 1) * args.save_pred_every),
-                                             name.split('.')[0] + '_color.png'))
-            else:
-                if not args.memory:
-                    if not os.path.exists(
-                            os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every))):
-                        os.makedirs(
-                            os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every)))
-                    output.save(
-                        os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every), name))
-                    output_col.save(
-                        os.path.join(args.save, 'single_level', 'step' + str((files + 1) * args.save_pred_every),
-                                     name.split('.')[0] + '_color.png'))
-                else:
-                    targetlist = list(dataset_dict.keys())
-                    foldername = 'GTA5to'
-                    for i in range(args.num_dataset - 1):
-                        foldername += targetlist[i]
-                        foldername += 'to'
-                    if not os.path.exists(
-                            os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every))):
-                        os.makedirs(
-                            os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every)))
-                    output.save(
-                        os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every), name))
-                    output_col.save(
-                        os.path.join(args.save, 'single_level_DM', foldername + str(args.target), 'step' + str((files + 1) * args.save_pred_every),
-                                     name.split('.')[0] + '_color.png'))
+
+            if not os.path.exists(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every))):
+                os.makedirs(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every)))
+            output.save(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every), name))
+            output_col.save(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every),
+                                         name.split('.')[0] + '_color.png'))
 
 
 if __name__ == '__main__':

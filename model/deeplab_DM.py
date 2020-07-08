@@ -22,8 +22,10 @@ def outS(i):
 
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+
+def conv1x1(in_planes, out_planes):
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, bias=False)
 
 class Multioutput_Sequential(nn.Module):
     def __init__(self, *args):
@@ -173,34 +175,61 @@ class Classifier_Module(nn.Module):
             out += self.conv2d_list[i + 1](x)
         return out
 
-class DM(nn.Module):
-    def __init__(self, inplanes, dilation_series, padding_series, num_classes):
-        super(DM, self).__init__()
-        self.conv2d_list = nn.ModuleList()
-        for dilation, padding in zip(dilation_series, padding_series):
-            self.conv2d_list.append(
-                nn.Conv2d(inplanes, num_classes, kernel_size=3, stride=1, padding=padding, dilation=dilation, bias=True))
+# class DM(nn.Module):
+#     def __init__(self, inplanes, dilation_series, padding_series, num_classes):
+#         super(DM, self).__init__()
+#         self.conv2d_list = nn.ModuleList()
+#         for dilation, padding in zip(dilation_series, padding_series):
+#             self.conv2d_list.append(
+#                 nn.Conv2d(inplanes, num_classes, kernel_size=3, stride=1, padding=padding, dilation=dilation, bias=True))
+#
+#         for m in self.conv2d_list:
+#             m.weight.data.normal_(0, 0.01)
+#
+#     def forward(self, x):
+#         out = self.conv2d_list[0](x)
+#         for i in range(len(self.conv2d_list) - 1):
+#             out += self.conv2d_list[i + 1](x)
+#         return out
 
-        for m in self.conv2d_list:
-            m.weight.data.normal_(0, 0.01)
+class DM(nn.Module):
+    def __init__(self, inplanes, num_classes):
+        super(DM, self).__init__()
+        self.module_list = nn.ModuleList()
+        self.module_list.append(conv1x1(inplanes, num_classes))
+        self.module_list.append(nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
+                                              nn.Conv2d(inplanes, num_classes, 1, bias=False),
+                                              nn.ReLU()))
+
+        for i, m in enumerate(self.module_list):
+            if i == 0:
+                m.weight.data.normal_(0, 0.01)
+            else:
+                for n in m:
+                    if isinstance(n, nn.Conv2d):
+                        n.weight.data.normal_(0, 0.01)
+                    elif isinstance(n, nn.BatchNorm2d):
+                        n.weight.data.fill_(1)
+                        n.bias.data.zero_()
 
     def forward(self, x):
-        out = self.conv2d_list[0](x)
-        for i in range(len(self.conv2d_list) - 1):
-            out += self.conv2d_list[i + 1](x)
-        return out
-
+        out1 = self.module_list[0](x)
+        out2 = self.module_list[1](x)
+        # out2 = functional.interpolate(self.module_list[1](x), size=out1.size()[2:], mode='bilinear', align_corners=True)
+        return out1, out2
 
 class ResNet_DM(nn.Module):
     def __init__(self, block, layers, num_classes, args=None, len_dataset=None):
         super(ResNet_DM, self).__init__()
-        self.scale = args.scale
         self.memory = args.memory
         self.warper = args.warper
+
         self.num_dataset = args.num_dataset
+        self.num_classes = num_classes
+        self.batch_size = args.batch_size
+
         self.inplanes = 64
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine=affine_par)
         for i in self.bn1.parameters():
             i.requires_grad = False
@@ -220,14 +249,8 @@ class ResNet_DM(nn.Module):
         if args.memory:
             for num_dataset in range(len_dataset):
                 DM_name = 'DM' + str(num_dataset + 1)
-                setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
-
-            # if self.scale:
-            #     scale = torch.randn(2048 + 3072).fill_(6000)
-            #     scale[:2048] *= args.alpha[len_dataset - 1]
-            #     for num_dataset in range(len_dataset):
-            #         scale_name = 'scale' + str(num_dataset + 1)
-            #         setattr(self, scale_name, nn.Parameter(scale.cuda(), requires_grad=True))
+                # setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
+                setattr(self, DM_name, DM(2048, num_classes))
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -259,9 +282,8 @@ class ResNet_DM(nn.Module):
 
 
     def forward(self, image, input_size, map=None):
-        DM_name = 'DM' + str(self.num_dataset)
-        if self.scale:
-            scale_name = 'scale' + str(self.num_dataset)
+        output_both_warped, output_ori_warped, output_both, output_ori = None, None, None, None
+
         x = self.conv1(image)
         x = self.bn1(x)
         x = self.relu(x)
@@ -272,25 +294,24 @@ class ResNet_DM(nn.Module):
 
         x1 = self.layer4(x)
 
-        if self.scale:  ### normalizing and scaling
-            # print(torch.norm(x1[0], p=2, dim=[1,2,3]))
-            x1[0] = x1[0].div(torch.norm(x1[0], p=2, dim=[1,2,3], keepdim=True))
-            x1[0] = getattr(self, scale_name)[:2048].reshape(1, 2048, 1, 1) * x1[0]
-
         x2 = self.layer6(x1[0])
         output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
-        x_up, x3_up, output_ori_warped = None, None, None
         if self.memory:
-            x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear outputs
-            if self.scale:  ### normalizing and scaling
-                # print(torch.norm(x3, p=2, dim=[1, 2, 3]))
-                x3 = x3.div(torch.norm(x3, p=2, dim=[1,2,3], keepdim=True))
-                x3 = getattr(self, scale_name)[2048:].reshape(1, 3072, 1, 1) * x3
+            DM_name = 'DM' + str(self.num_dataset)
 
-            x3 = getattr(self, DM_name)(x3)
-            x3_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x3)  # ResNet + DM
-            x_up = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2 + x3)  # ResNet + (ASPP+DM)
+            # x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear(1) outputs
+            x3 = x1[0]  # without skip connection nonlinear(0)/linear(1) output
+
+            x3_1, x3_2 = getattr(self, DM_name)(x3)
+            new_x = x2 + x2.view(self.batch_size, self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
+                    ((x3_1 - x3_1.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
+                     x3_1.view(self.batch_size, self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3))
+            # new_x += x2.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
+            #          (x3_2 - x3_2.view(self.batch_size, -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
+            #          x3_2.view(self.batch_size, -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
+            new_x += functional.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
+            output_both = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
         if self.warper:
             if map is not None:
@@ -299,14 +320,15 @@ class ResNet_DM(nn.Module):
                 # x2_softmax = nn.Softmax()(x2_up)
                 # x2_filtered = self.threshold(x2_softmax)
                 # warper, warp_list = self.WarpModel(image, x2_filtered)
-                if self.memory:
-                    warper, warp_list = self.WarpModel(x_up, None)
-                    x_up_warped = self.warp(x_up, warper)
-                    return x_up_warped, output_ori, x3_up, x_up
-                else:
+
+                if not self.memory:
                     warper, warp_list = self.WarpModel(output_ori, None)
                     output_ori_warped = self.warp(output_ori, warper)
-                    return x_up, output_ori_warped, x3_up, output_ori
+                else:
+                    warper, warp_list = self.WarpModel(output_both, None)
+                    output_both_warped = self.warp(output_both, warper)
+
+        return output_both_warped, output_ori_warped, output_both, output_ori
 
 
     def ResNet_params(self):
@@ -356,7 +378,7 @@ class ResNet_DM(nn.Module):
                 yield i
 
     def parameters_seg(self, args):
-        if args.num_dataset == 1:
+        if args.num_dataset == 1 or args.source_only:
             optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
                                 {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate}]
 
@@ -366,9 +388,6 @@ class ResNet_DM(nn.Module):
 
         if self.memory:
             optim_parameters += [{'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
-
-        if self.scale:
-            optim_parameters += [{'params': getattr(self, 'scale' + str(args.num_dataset)), 'lr': 10 * args.learning_rate}]
 
         return optim_parameters
 
