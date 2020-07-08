@@ -332,8 +332,8 @@ def main():
         if not args.source_only:
             optimizer_D.step()
 
-        if args.warper:
-            if args.memory:
+        if args.warper:  # retain_graph=True -> CUDA out of memory
+            if args.memory:  # feed-forwarding the input again
                 pred_warped, _, pred, _ = model(images, input_size)
             else:
                 _, pred_warped, _, pred = model(images, input_size)
@@ -363,7 +363,7 @@ def main():
                 i_iter, args.num_steps, loss_seg_value_before_warped, loss_seg_value_after_warped, loss_distillation_value,
                 loss_adv_target_value, loss_D_value))
 
-        '''save model'''
+        # ---------------------------------------------- save model -----------------------------------------------------
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
             if args.source_only:
