@@ -19,6 +19,8 @@ from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.synthia_dataset import synthiaDataset
 from utils.tsne_plot import TSNE_plot
 from utils.model_save import save_model
+from torch.nn import DataParallel
+
 
 
 PRE_TRAINED_SEG = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model.pth'
@@ -78,6 +80,8 @@ def main():
 
     # Create network
     model = Deeplab_DM(args=args)
+    model_D = None
+
     if args.source_only:  # training model from pre-trained ResNet on source domain
         if args.restore_from_resnet[:4] == 'http':
             saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
@@ -113,18 +117,6 @@ def main():
                     new_params[i] = saved_state_dict[i]
             model.load_state_dict(new_params)
 
-    model.train()
-    model.to(device)
-
-    if not args.source_only and args.memory and not args.num_dataset == 1:
-        ref_model = copy.deepcopy(model)  # reference model for distillation loss
-        for params in ref_model.parameters():
-            params.requires_grad = False
-
-    cudnn.benchmark = True
-
-    # init D
-    if not args.source_only:
         model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
 
         if PRE_TRAINED_DISC is not None:
@@ -136,18 +128,13 @@ def main():
             model_D.load_state_dict(new_params)
 
         model_D.train()
-        model_D.to(device)
+        if args.multi_gpu:
+            model_D = DataParallel(model_D)
+            optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        else:
+            model_D.to(device)
+            optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
 
-    # Dataloader
-    trainloader = data.DataLoader(
-        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
-                    crop_size=input_size,
-                    scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
-        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
-
-    trainloader_iter = enumerate(trainloader)
-
-    if not args.source_only:
         if args.target == 'CityScapes':
             targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                              max_iters=args.num_steps * args.batch_size,
@@ -157,25 +144,19 @@ def main():
                                            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                            pin_memory=True)
         elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
-            targetloader = data.DataLoader(synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt',
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                             set=args.set),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
+            targetloader = data.DataLoader(
+                synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt',
+                               max_iters=args.num_steps * args.batch_size,
+                               crop_size=input_size_target,
+                               scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                               set=args.set),
+                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                pin_memory=True)
         else:
             raise NotImplementedError('Unavailable target domain')
 
         targetloader_iter = enumerate(targetloader)
 
-    # implement model.optim_parameters(args) to handle different models' lr setting
-    optimizer = optim.SGD(model.parameters_seg(args),
-                          lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-    optimizer.zero_grad()
-
-    if not args.source_only:
-        optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
         optimizer_D.zero_grad()
 
         if args.gan == 'Vanilla':
@@ -186,6 +167,29 @@ def main():
         # labels for adversarial training
         source_label = 0
         target_label = 1
+
+    model.train()
+
+    if args.multi_gpu:
+        model = DataParallel(model)
+        # implement model.optim_parameters(args) to handle different models' lr setting
+        optimizer = optim.SGD(model.parameters_seg_multi(args),
+                              lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+    else:
+        model.to(device)
+        # implement model.optim_parameters(args) to handle different models' lr setting
+        optimizer = optim.SGD(model.parameters_seg(args),
+                              lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+
+    if not args.source_only and args.memory and not args.num_dataset == 1:
+        ref_model = copy.deepcopy(model)  # reference model for distillation loss
+        for params in ref_model.parameters():
+            params.requires_grad = False
+
+    cudnn.benchmark = True
+    optimizer.zero_grad()
+
+
 
     if args.warper:
         optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
@@ -199,6 +203,14 @@ def main():
             os.makedirs(args.log_dir)
 
         writer = SummaryWriter(args.log_dir)
+
+        # Dataloader
+    trainloader = data.DataLoader(
+        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+                    crop_size=input_size,
+                    scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
+        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    trainloader_iter = enumerate(trainloader)
 
     # start training
     for i_iter in range(args.num_steps):

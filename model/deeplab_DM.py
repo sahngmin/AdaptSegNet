@@ -223,7 +223,7 @@ class ResNet_DM(nn.Module):
         super(ResNet_DM, self).__init__()
         self.memory = args.memory
         self.warper = args.warper
-
+        self.multi_gpu = args.multi_gpu
         self.num_dataset = args.num_dataset
         self.num_classes = num_classes
         self.batch_size = args.batch_size
@@ -350,7 +350,11 @@ class ResNet_DM(nn.Module):
         for i in range(len(b)):
             for j in b[i].modules():
                 jj = 0
-                for k in j.parameters():
+                if self.multi_gpu:
+                    j_param = j.module.parameters()
+                else:
+                    j_param = j.parameters()
+                for k in j_param:
                     jj += 1
                     if k.requires_grad:
                         yield k
@@ -361,7 +365,11 @@ class ResNet_DM(nn.Module):
         which does the classification of pixel into classes
         """
         b = []
-        b.append(self.layer6.parameters())
+        if self.multi_gpu:
+            layer6_param = self.layer6.module.parameters()
+        else:
+            layer6_param = self.layer6.parameters()
+        b.append(layer6_param)
 
         for j in range(len(b)):
             for i in b[j]:
@@ -371,7 +379,12 @@ class ResNet_DM(nn.Module):
         DM_name = 'DM' + str(args.num_dataset)
 
         b = []
-        b.append(getattr(self, DM_name).parameters())
+        if self.multi_gpu:
+            dm_param = getattr(self, DM_name).module.parameters()
+        else:
+            dm_param = getattr(self, DM_name).parameters()
+        
+        b.append(dm_param)
 
         for j in range(len(b)):
             for i in b[j]:
@@ -390,6 +403,7 @@ class ResNet_DM(nn.Module):
             optim_parameters += [{'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
 
         return optim_parameters
+
 
     def parameters_warp(self, args):
         optim_parameters = [{'params': self.WarpModel.parameters(), 'lr': 10 * args.learning_rate}]
