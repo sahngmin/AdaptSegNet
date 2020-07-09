@@ -81,7 +81,16 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_dir', type=str, default='/work/CityScapes/gtFine/val', help='directory which stores CityScapes val gt images')
+
+    # parser.add_argument('--gt_dir', type=str, default='/home/joonhkim/UDA/datasets/CityScapes/gtFine/val',
+    #                     help='directory which stores CityScapes val gt images')
+    parser.add_argument('--gt_dir', type=str, default='/work/CityScapes/gtFine/val',
+                        help='directory which stores CityScapes val gt images')
+    # parser.add_argument('--gt_dir', type=str, default='/home/smyoo/CAG_UDA/dataset/CityScapes/gtFine/val',
+    #                     help='directory which stores CityScapes val gt images')
+    # parser.add_argument('--gt_dir', type=str, default='/home/aiwc/Datasets/CityScapes/gtFine/val',
+    #                     help='directory which stores CityScapes val gt images')
+
     parser.add_argument('--pred_dir', type=str, default='./result', help='directory which stores CityScapes val pred images')
     parser.add_argument('--devkit_dir', default='dataset/cityscapes_list', help='base directory of cityscapes')
 
