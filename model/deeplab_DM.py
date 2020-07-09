@@ -339,22 +339,25 @@ class ResNet_DM(nn.Module):
         any batchnorm parameter
         """
         b = []
-
-        b.append(self.conv1)
-        b.append(self.bn1)
-        b.append(self.layer1)
-        b.append(self.layer2)
-        b.append(self.layer3)
-        b.append(self.layer4)
+        if self.multi_gpu:
+            b.append(self.module.conv1)
+            b.append(self.module.bn1)
+            b.append(self.module.layer1)
+            b.append(self.module.layer2)
+            b.append(self.module.layer3)
+            b.append(self.module.layer4)
+        else:
+            b.append(self.conv1)
+            b.append(self.bn1)
+            b.append(self.layer1)
+            b.append(self.layer2)
+            b.append(self.layer3)
+            b.append(self.layer4)
 
         for i in range(len(b)):
             for j in b[i].modules():
                 jj = 0
-                if self.multi_gpu:
-                    j_param = j.module.parameters()
-                else:
-                    j_param = j.parameters()
-                for k in j_param:
+                for k in j.parameters():
                     jj += 1
                     if k.requires_grad:
                         yield k
@@ -366,7 +369,7 @@ class ResNet_DM(nn.Module):
         """
         b = []
         if self.multi_gpu:
-            layer6_param = self.layer6.module.parameters()
+            layer6_param = self.module.layer6.parameters()
         else:
             layer6_param = self.layer6.parameters()
         b.append(layer6_param)
@@ -380,10 +383,10 @@ class ResNet_DM(nn.Module):
 
         b = []
         if self.multi_gpu:
-            dm_param = getattr(self, DM_name).module.parameters()
+            dm_param = getattr(self.module, DM_name).parameters()
         else:
             dm_param = getattr(self, DM_name).parameters()
-        
+
         b.append(dm_param)
 
         for j in range(len(b)):
