@@ -13,3 +13,4 @@ python2_code/
 snapshots/
 dataset/SYNTHIA-SEQS-01-WINTERNIGHT
 dataset/gta5_dataset.py
+log/
