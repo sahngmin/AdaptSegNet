@@ -63,7 +63,7 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     return mIoUs
 
 
-def main(args):
+def compute_iou(args):
     seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -102,4 +102,4 @@ if __name__ == "__main__":
                         help="Random seed to have reproducible results.")
 
     args = parser.parse_args()
-    main(args)
+    compute_iou(args)

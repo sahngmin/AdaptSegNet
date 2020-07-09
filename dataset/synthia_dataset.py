@@ -8,9 +8,8 @@ import torch
 import torchvision
 from torch.utils import data
 from PIL import Image
-from options import TrainOptions
 
-class cityscapesDataSet(data.Dataset):
+class synthiaDataset(data.Dataset):
     def __init__(self, root, list_path, max_iters=None, crop_size=(321, 321), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='val'):
         self.root = root
         self.list_path = list_path
@@ -27,7 +26,7 @@ class cityscapesDataSet(data.Dataset):
         self.set = set
         # for split in ["train", "trainval", "val"]:
         for name in self.img_ids:
-            img_file = osp.join(self.root, "leftImg8bit/%s/%s" % (self.set, name))
+            img_file = osp.join(self.root, self.set, name)
             self.files.append({
                 "img": img_file,
                 "name": name
@@ -56,17 +55,10 @@ class cityscapesDataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    args = TrainOptions().parse()
-    IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
-    input_size_target = (1024,512)
-    dst = cityscapesDataSet(args.data_dir_target, './cityscapes_list/train.txt',
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                             set=args.set)
+    dst = synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt', set='train')
     trainloader = data.DataLoader(dst, batch_size=4)
     for i, data in enumerate(trainloader):
-        imgs, labels = data
+        imgs, labels, name = data
         if i == 0:
             img = torchvision.utils.make_grid(imgs).numpy()
             img = np.transpose(img, (1, 2, 0))

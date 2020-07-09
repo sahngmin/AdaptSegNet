@@ -16,7 +16,10 @@ from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
+from dataset.synthia_dataset import synthiaDataset
 from utils.tsne_plot import TSNE_plot
+from utils.model_save import save_model
+
 
 PRE_TRAINED_SEG = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model.pth'
 # PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
@@ -43,9 +46,11 @@ def adjust_learning_rate(optimizer, i_iter, args):
             for i in range(2, len(optimizer.param_groups)):
                 optimizer.param_groups[i]['lr'] = lr * 10
 
+
 def adjust_learning_rate_D(optimizer, i_iter):
     lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
     optimizer.param_groups[0]['lr'] = lr
+
 
 def distillation_loss(pred_origin, old_outputs):
     pred_origin_logsoftmax = (pred_origin / 2).log_softmax(dim=1)
@@ -53,6 +58,7 @@ def distillation_loss(pred_origin, old_outputs):
     loss_distillation = (-(old_outputs * pred_origin_logsoftmax)).sum(dim=1)
     loss_distillation = loss_distillation.sum() / loss_distillation.flatten().shape[0]
     return loss_distillation
+
 
 def main():
     seed = args.random_seed
@@ -132,34 +138,6 @@ def main():
         model_D.train()
         model_D.to(device)
 
-    # Snapshots directory
-    if args.source_only:
-        if args.warper and args.memory:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'source_only_warp_DM')):
-                os.makedirs(osp.join(args.snapshot_dir, 'source_only_warp_DM'))
-        elif args.warper:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'source_only_warp')):
-                os.makedirs(osp.join(args.snapshot_dir, 'source_only_warp'))
-        elif args.memory:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'source_only_DM')):
-                os.makedirs(osp.join(args.snapshot_dir, 'source_only_DM'))
-        else:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'source_only')):
-                os.makedirs(osp.join(args.snapshot_dir, 'source_only'))
-    else:
-        if args.warper and args.memory:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'single_alignment_warp_DM')):
-                os.makedirs(osp.join(args.snapshot_dir, 'single_alignment_warp_DM'))
-        elif args.warper:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'single_alignment_warp')):
-                os.makedirs(osp.join(args.snapshot_dir, 'single_alignment_warp'))
-        elif args.memory:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'single_alignment_DM')):
-                os.makedirs(osp.join(args.snapshot_dir, 'single_alignment_DM'))
-        else:
-            if not os.path.exists(osp.join(args.snapshot_dir, 'single_alignment')):
-                os.makedirs(osp.join(args.snapshot_dir, 'single_alignment'))
-
     # Dataloader
     trainloader = data.DataLoader(
         GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
@@ -179,7 +157,7 @@ def main():
                                            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                            pin_memory=True)
         elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
-            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+            targetloader = data.DataLoader(synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt',
                                                              max_iters=args.num_steps * args.batch_size,
                                                              crop_size=input_size_target,
                                                              scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
@@ -363,167 +341,9 @@ def main():
                 i_iter, args.num_steps, loss_seg_value_before_warped, loss_seg_value_after_warped, loss_distillation_value,
                 loss_adv_target_value, loss_D_value))
 
-        # ---------------------------------------------- save model -----------------------------------------------------
-        if i_iter >= args.num_steps_stop - 1:
-            print('save model ...')
-            if args.source_only:
-                if args.warper and args.memory:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only_warp_DM',
-                                                            'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                elif args.warper:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only_warp',
-                                                            'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                elif args.memory:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only_DM',
-                                                            'GTA5_' + str(args.num_steps_stop) + '.pth'))
-                else:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only',
-                                                            'GTA5_' + str(args.num_steps_stop) + '.pth'))
-            else:
-                if args.num_dataset == 1:
-                    if args.warper and args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                    elif args.warper:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                    elif args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                    else:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            'GTA5to' + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                else:
-                    targetlist = list(dataset_dict.keys())
-                    filename = 'GTA5to'
-                    for i in range(args.num_dataset - 1):
-                        filename += targetlist[i]
-                        filename += 'to'
-                    if args.warper and args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                    elif args.warper:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                    elif args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
-                    else:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            filename + str(args.target) + str(args.num_steps_stop) + '_D.pth'))
+        state = save_model(i_iter, args, model, model_D)
+        if state:
             break
-
-        if i_iter % args.save_pred_every == 0 and i_iter != 0:
-            print('taking snapshot ...')
-            if args.source_only:
-                if args.warper and args.memory:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only_warp_DM',
-                                                            'GTA5_' + str(i_iter) + '.pth'))
-                elif args.warper:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only_warp',
-                                                            'GTA5_' + str(i_iter) + '.pth'))
-                elif args.memory:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only_DM',
-                                                            'GTA5_' + str(i_iter) + '.pth'))
-                else:
-                    torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'source_only',
-                                                            'GTA5_' + str(i_iter) + '.pth'))
-            else:
-                if args.num_dataset == 1:
-                    if args.warper and args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '_D.pth'))
-                    elif args.warper:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '_D.pth'))
-                    elif args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '_D.pth'))
-                    else:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            'GTA5to' + str(args.target) + str(i_iter) + '_D.pth'))
-                else:
-                    targetlist = list(dataset_dict.keys())
-                    filename = 'GTA5to'
-                    for i in range(args.num_dataset - 1):
-                        filename += targetlist[i]
-                        filename += 'to'
-                    if args.warper and args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            filename + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            filename + str(args.target) + str(i_iter) + '_D.pth'))
-                    elif args.warper:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            filename + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            filename + str(args.target) + str(i_iter) + '_D.pth'))
-                    elif args.memory:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            filename + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            filename + str(args.target) + str(i_iter) + '_D.pth'))
-                    else:
-                        torch.save(model.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            filename + str(args.target) + str(i_iter) + '.pth'))
-                        torch.save(model_D.state_dict(),
-                                   osp.join(args.snapshot_dir, 'single_alignment',
-                                            filename + str(args.target) + str(i_iter) + '_D.pth'))
 
     if args.tensorboard:
         writer.close()

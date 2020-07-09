@@ -11,3 +11,5 @@ snapshots/
 python2_code/
 .DS_Store
 snapshots/
+dataset/SYNTHIA-SEQS-01-WINTERNIGHT
+dataset/gta5_dataset.py

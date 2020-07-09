@@ -18,6 +18,7 @@ from collections import OrderedDict
 import os
 import os.path as osp
 from PIL import Image
+from compute_iou import compute_iou
 
 SOURCE_ONLY = False
 MEMORY = True
@@ -29,9 +30,11 @@ NUM_STEPS_STOP = 150000  # early stopping
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/CityScapes'
-DATA_DIRECTORY = '/work/CityScapes'
-# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+# DATA_DIRECTORY = '/work/CityScapes'
+DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/CityScapes'
 # DATA_DIRECTORY = '/home/aiwc/Datasets/CityScapes'
+
+GT_DIR = '/home/smyoo/CAG_UDA/dataset/CityScapes/gtFine/val'
 
 dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'
@@ -98,6 +101,16 @@ def get_arguments():
     parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
     parser.add_argument("--warper", action='store_true', default=WARPER)
     parser.add_argument("--feat-warp", default=True)
+
+    parser.add_argument('--gt_dir', type=str, default=GT_DIR)
+    # parser.add_argument('--gt_dir', type=str, default='/home/smyoo/CAG_UDA/dataset/CityScapes/gtFine/val',
+    #                     help='directory which stores CityScapes val gt images')
+    # parser.add_argument('--gt_dir', type=str, default='/home/aiwc/Datasets/CityScapes/gtFine/val',
+    #                     help='directory which stores CityScapes val gt images')
+
+    parser.add_argument('--pred_dir', type=str, default='./result',
+                        help='directory which stores CityScapes val pred images')
+    parser.add_argument('--devkit_dir', default='dataset/cityscapes_list', help='base directory of cityscapes')
 
 
     return parser.parse_args()
@@ -227,6 +240,7 @@ def main():
             output_col.save(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every),
                                          name.split('.')[0] + '_color.png'))
 
+    compute_iou(args)
 
 if __name__ == '__main__':
     main()

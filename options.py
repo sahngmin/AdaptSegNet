@@ -33,23 +33,23 @@ BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
-DATA_DIRECTORY = '/work/GTA5'
-# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+# DATA_DIRECTORY = '/work/GTA5'
+DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
 # DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-DATA_DIRECTORY_TARGET = '/work/CityScapes'
-# DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+# DATA_DIRECTORY_TARGET = '/work/CityScapes'
+DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
 # DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
 NUM_CLASSES = 19
 
-RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-# RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
+# RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
 SAVE_NUM_IMAGES = 2
 
@@ -137,7 +137,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
                             help="Regularisation parameter for L2-loss.")
         self.parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
-        self.parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.")
+        self.parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.", default=True)
         self.parser.add_argument("--log-dir", type=str, default=LOG_DIR,
                             help="Path to the directory of log.")
         self.parser.add_argument("--set", type=str, default=SET,

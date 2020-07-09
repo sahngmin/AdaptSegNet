@@ -40,7 +40,8 @@ class GTA5DataSet(data.Dataset):
             })
 
     def __len__(self):
-        return len(self.files)
+        # return len(self.files)
+        return 2499
 
 
     def __getitem__(self, index):
@@ -71,7 +72,7 @@ class GTA5DataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = GTA5DataSet("./data", is_transform=True)
+    dst = GTA5DataSet("./data")
     trainloader = data.DataLoader(dst, batch_size=4)
     for i, data in enumerate(trainloader):
         imgs, labels = data
