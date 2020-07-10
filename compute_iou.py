@@ -75,7 +75,7 @@ def main(args):
         pred_dir = join(args.pred_dir, 'step' + str((files + 1) * args.save_pred_every))
         compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
 
-    # pred_dir = join(args.pred_dir, 'step' + str(115000))
+    # pred_dir = join(args.pred_dir, 'step' + str(5000))
     # compute_mIoU(args.gt_dir, pred_dir, args.devkit_dir)
 
 

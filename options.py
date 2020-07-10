@@ -7,7 +7,7 @@ FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
-NUM_STEPS = 150000
+NUM_STEPS = 300000
 
 dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
 TARGET = 'CityScapes'

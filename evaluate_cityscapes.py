@@ -149,6 +149,8 @@ def main():
                 elif args.memory:
                     saved_state_dict = torch.load('./snapshots/single_alignment_DM/' + 'GTA5to' + str(args.target)
                                                   + str((files + 1) * args.save_pred_every) + '.pth')
+                    # saved_state_dict = torch.load('./snapshots/single_alignment_DM/' + 'GTA5to' + str(args.target)
+                    #                               + str(135000) + '.pth')
                 else:
                     saved_state_dict = torch.load('./snapshots/single_alignment/' + 'GTA5to' + str(args.target)
                                                   + str((files + 1) * args.save_pred_every) + '.pth')
@@ -207,6 +209,7 @@ def main():
                 _, output, _, _ = model(image, input_size)
             elif args.memory:
                 _, _, output, _ = model(image, input_size)
+                # _, _, _, output = model(image, input_size)
             else:
                 _, _, _, output = model(image, input_size)
             output = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(output)
