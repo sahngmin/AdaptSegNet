@@ -1,9 +1,9 @@
 import argparse
 
-SOURCE_ONLY = True
-MEMORY = True
-WARPER = False
-FROM_SCRATCH = True
+SOURCE_ONLY = False
+MEMORY = False
+WARPER = True
+FROM_SCRATCH = False
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping

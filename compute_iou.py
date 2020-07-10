@@ -5,6 +5,9 @@ import torch
 import random
 from PIL import Image
 from os.path import join
+from model.deeplab_DM import Deeplab_DM
+from options import TrainOptions, dataset_dict
+
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
@@ -28,6 +31,23 @@ def label_mapping(input, mapping):
 
 
 def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
+
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+
+    PRE_TRAINED_SEG = './snapshots/OLD/Scratch_warper/single_level/GTA5_75000.pth'
+    saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
+
+    opt = TrainOptions().parse()
+
+
+    model = Deeplab_DM(args=opt)
+
+    new_params = model.state_dict().copy()
+    for i in saved_state_dict:
+        if i in new_params.keys():
+            new_params[i] = saved_state_dict[i]
+    model.load_state_dict(new_params)
+
     """
     Compute IoU given the predicted colorized images and 
     """
@@ -48,6 +68,10 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     for ind in range(len(gt_imgs)):
         pred = np.array(Image.open(pred_imgs[ind]))
         label = np.array(Image.open(gt_imgs[ind]))
+
+        label_img = torch.Tensor(label).unsqueeze(0)
+        _, warped, _, output = model(label_img)
+
         label = label_mapping(label, mapping)
         if len(label.flatten()) != len(pred.flatten()):
             print('Skipping: len(gt) = {:d}, len(pred) = {:d}, {:s}, {:s}'.format(len(label.flatten()), len(pred.flatten()), gt_imgs[ind], pred_imgs[ind]))

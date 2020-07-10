@@ -23,7 +23,7 @@ from torch.nn import DataParallel
 
 
 
-PRE_TRAINED_SEG = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model.pth'
+PRE_TRAINED_SEG = './snapshots/OLD/Scratch_warper/single_level/GTA5_75000.pth'
 # PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
 PRE_TRAINED_DISC = None
 
@@ -189,8 +189,6 @@ def main():
     cudnn.benchmark = True
     optimizer.zero_grad()
 
-
-
     if args.warper:
         optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
         optimizer_warp.zero_grad()
@@ -278,6 +276,7 @@ def main():
                 _, _, pred_target, _ = model(images_target, input_size)
             else:
                 _, _, _, pred_target = model(images_target, input_size)
+
 
             D_out = model_D(F.softmax(pred_target, dim=1))
 
