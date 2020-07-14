@@ -14,22 +14,19 @@ import copy
 from options import TrainOptions, dataset_dict
 from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator
-from dataset.gta5_dataset import GTA5DataSet
-from dataset.cityscapes_dataset import cityscapesDataSet
-from utils.tsne_plot import TSNE_plot
+from dataset.synthia_dataset import SYNTHIADataSet
+from compute_iou import fast_hist, per_class_iu
 
-PRE_TRAINED_SEG = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model.pth'
-# PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
+PRE_TRAINED_SEG = ''
+# PRE_TRAINED_DISC = ''
 PRE_TRAINED_DISC = None
 
-IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
+IMG_MEAN = np.array((0, 0, 0), dtype=np.float32)
 
 args = TrainOptions().parse()
 
-
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
-
 
 def adjust_learning_rate(optimizer, i_iter, args):
     lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
@@ -72,6 +69,7 @@ def main():
 
     # Create network
     model = Deeplab_DM(args=args)
+
     if args.source_only:  # training model from pre-trained ResNet on source domain
         if args.restore_from_resnet[:4] == 'http':
             saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
@@ -107,18 +105,6 @@ def main():
                     new_params[i] = saved_state_dict[i]
             model.load_state_dict(new_params)
 
-    model.train()
-    model.to(device)
-
-    if not args.source_only and args.memory and not args.num_dataset == 1:
-        ref_model = copy.deepcopy(model)  # reference model for distillation loss
-        for params in ref_model.parameters():
-            params.requires_grad = False
-
-    cudnn.benchmark = True
-
-    # init D
-    if not args.source_only:
         model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
 
         if PRE_TRAINED_DISC is not None:
@@ -131,45 +117,17 @@ def main():
 
         model_D.train()
         model_D.to(device)
+        optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
 
-    # Dataloader
-    trainloader = data.DataLoader(
-        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
-                    crop_size=input_size,
-                    scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
-        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
-
-    trainloader_iter = enumerate(trainloader)
-
-    if not args.source_only:
-        if args.target == 'CityScapes':
-            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                             set=args.set),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
-        elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
-            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                             set=args.set),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
-        else:
-            raise NotImplementedError('Unavailable target domain')
-
+        targetloader = torch.utils.data.DataLoader(SYNTHIADataSet(args.data_dir_target, args.data_list_target,
+                                                      max_iters=args.num_steps * args.batch_size,
+                                                      crop_size=input_size_target,
+                                                      scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                      set=args.set),
+                                       batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                       pin_memory=True)
         targetloader_iter = enumerate(targetloader)
 
-    # implement model.optim_parameters(args) to handle different models' lr setting
-    optimizer = optim.SGD(model.parameters_seg(args),
-                          lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-    optimizer.zero_grad()
-
-    if not args.source_only:
-        optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
         optimizer_D.zero_grad()
 
         if args.gan == 'Vanilla':
@@ -181,11 +139,26 @@ def main():
         source_label = 0
         target_label = 1
 
+    model.train()
+
+    model.to(device)
+    # implement model.optim_parameters(args) to handle different models' lr setting
+    optimizer = optim.SGD(model.parameters_seg(args),
+                          lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+
+    if not args.source_only and args.memory and not args.num_dataset == 1:
+        ref_model = copy.deepcopy(model)  # reference model for distillation loss
+        for params in ref_model.parameters():
+            params.requires_grad = False
+
+    cudnn.benchmark = True
+    optimizer.zero_grad()
+
     if args.warper:
         optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
         optimizer_warp.zero_grad()
 
-    seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
+    seg_loss = torch.nn.CrossEntropyLoss(ignore_index=args.ignore_label)
 
     # set up tensor board
     if args.tensorboard:
@@ -193,6 +166,15 @@ def main():
             os.makedirs(args.log_dir)
 
         writer = SummaryWriter(args.log_dir)
+
+    # Dataloader
+    trainloader = torch.utils.data.DataLoader(SYNTHIADataSet(args.data_dir, args.data_list,
+                                                 max_iters=args.num_steps * args.batch_size,
+                                                 crop_size=input_size,
+                                                 scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
+                                  batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                  pin_memory=True)
+    trainloader_iter = enumerate(trainloader)
 
     # start training
     for i_iter in range(args.num_steps):
@@ -249,7 +231,7 @@ def main():
 
         if not args.source_only:
             _, batch = targetloader_iter.__next__()
-            images_target, _, _ = batch
+            images_target, _, _, _ = batch
             images_target = images_target.to(device)
 
             if args.warper and args.memory:
@@ -260,6 +242,7 @@ def main():
                 _, _, pred_target, _ = model(images_target, input_size)
             else:
                 _, _, _, pred_target = model(images_target, input_size)
+
 
             D_out = model_D(F.softmax(pred_target, dim=1))
 
@@ -384,39 +367,31 @@ def main():
                     if args.warper and args.memory:
                         torch.save(model.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '.pth'))
                         torch.save(model_D.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment_warp_DM',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '_D.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '_D.pth'))
                     elif args.warper:
                         torch.save(model.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '.pth'))
                         torch.save(model_D.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment_warp',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '_D.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '_D.pth'))
                     elif args.memory:
                         torch.save(model.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '.pth'))
                         torch.save(model_D.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment_DM',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '_D.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '_D.pth'))
                     else:
                         torch.save(model.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '.pth'))
                         torch.save(model_D.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment',
-                                            str(args.source) + 'to' + str(args.target) + '_' + str(
-                                                args.num_steps_stop) + '_D.pth'))
+                                            str(args.source) + 'to' + str(args.target) + '_' + str(args.num_steps_stop) + '_D.pth'))
                 else:
                     targetlist = list(dataset_dict.keys())
                     filename = str(args.source) + 'to'
@@ -454,6 +429,69 @@ def main():
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
+            # if args.source_only:
+            #     print('checking validation accuracy ...')
+            #     train_val_loader = torch.utils.data.DataLoader(SYNTHIADataSet(args.data_dir, './dataset/synthia_seqs_02_spring_list/val.txt',
+            #                                                  max_iters=None,
+            #                                                  crop_size=input_size,
+            #                                                  scale=args.random_scale, mirror=args.random_mirror,
+            #                                                  mean=IMG_MEAN, set='val'),
+            #                                   batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+            #                                   pin_memory=True)
+            #     hist = np.zeros((args.num_classes, args.num_classes))
+            #     for i, data in enumerate(train_val_loader):
+            #         images_val, labels, _, _ = data
+            #         images_val, labels = images_val.to(device), labels.to(device)
+            #         if args.warper and args.memory:
+            #             pred_warped, _, pred, _ = model(images_val, input_size)
+            #         elif args.warper:
+            #             _, pred_warped, _, pred = model(images_val, input_size)
+            #         elif args.memory:
+            #             _, _, pred, _ = model(images_val, input_size)
+            #         else:
+            #             _, _, _, pred = model(images_val, input_size)
+            #         labels = labels.squeeze()
+            #         pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
+            #         _, pred = pred.squeeze().max(dim=0)
+            #
+            #         labels = labels.cpu().numpy()
+            #         pred = pred.cpu().detach().numpy()
+            #
+            #         hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+            #     mIoUs = per_class_iu(hist)
+            #     print('===> mIoU (Source): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
+            #
+            #     val_val_loader = torch.utils.data.DataLoader(
+            #         SYNTHIADataSet(args.data_dir_target, './dataset/synthia_seqs_04_spring_list/val.txt',
+            #                        max_iters=None,
+            #                        crop_size=input_size,
+            #                        scale=args.random_scale, mirror=args.random_mirror,
+            #                        mean=IMG_MEAN, set='val'),
+            #         batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+            #         pin_memory=True)
+            #     hist = np.zeros((args.num_classes, args.num_classes))
+            #     for i, data in enumerate(val_val_loader):
+            #         images_val, labels, _, _ = data
+            #         images_val, labels = images_val.to(device), labels.to(device)
+            #         if args.warper and args.memory:
+            #             pred_warped, _, pred, _ = model(images_val, input_size)
+            #         elif args.warper:
+            #             _, pred_warped, _, pred = model(images_val, input_size)
+            #         elif args.memory:
+            #             _, _, pred, _ = model(images_val, input_size)
+            #         else:
+            #             _, _, _, pred = model(images_val, input_size)
+            #         labels = labels.squeeze()
+            #         pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
+            #         _, pred = pred.squeeze().max(dim=0)
+            #
+            #         labels = labels.cpu().numpy()
+            #         pred = pred.cpu().detach().numpy()
+            #
+            #         hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+            #     mIoUs = per_class_iu(hist)
+            #     print('===> mIoU (Target): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
+
             print('taking snapshot ...')
             if args.source_only:
                 if args.warper and args.memory:
@@ -532,6 +570,7 @@ def main():
                         torch.save(model_D.state_dict(),
                                    osp.join(args.snapshot_dir, 'single_alignment',
                                             filename + str(args.target) + '_' + str(i_iter) + '_D.pth'))
+
 
     if args.tensorboard:
         writer.close()

@@ -11,58 +11,50 @@ from torch.autograd import Variable
 import torchvision.models as models
 import torch.nn.functional as F
 from torch.utils import data, model_zoo
-from model.deeplab import Deeplab
 from model.deeplab_DM import Deeplab_DM
-from dataset.cityscapes_dataset import cityscapesDataSet
+from dataset.synthia_dataset import SYNTHIADataSet
 from collections import OrderedDict
 import os
 import os.path as osp
 from PIL import Image
 
-SOURCE_ONLY = False
+SOURCE_ONLY = True
 MEMORY = True
 WARPER = False
+
+TRAIN_VAL = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
 
-IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
+IMG_MEAN = np.array((76.4177, 76.9393, 84.3837), dtype=np.float32)
 
-# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/CityScapes'
-DATA_DIRECTORY = '/work/CityScapes'
-# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/CityScapes'
-# DATA_DIRECTORY = '/home/aiwc/Datasets/CityScapes'
+DATA_DIRECTORY = '/work/SYNTHIA-SEQS-02-SPRING'
+DATA_LIST_PATH = './dataset/synthia_seqs_02_spring_list/val.txt'
 
-dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
-SOURCE = 'GTA5'
-TARGET = 'CityScapes'
+DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-04-SPRING'
+DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_04_spring_list/val.txt'
+
+dataset_dict = {'SEQS-02-SPRING': 0, 'SEQS-04-SPRING': 1, 'SEQS-01-SPRING': 2}
+SOURCE = 'SEQS-02-SPRING'
+TARGET = 'SEQS-04-SPRING'
 NUM_DATASET = dataset_dict[TARGET]
 
-DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
-SAVE_PATH = './result'
-
 IGNORE_LABEL = 255
-NUM_CLASSES = 19
+NUM_CLASSES = 13
 BATCH_SIZE = 1
-NUM_STEPS = 500 # Number of images in the validation set.
 
 SET = 'val'
 
 RANDOM_SEED = 1338
 
-palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156, 190, 153, 153, 153, 153, 153, 250, 170, 30,
-           220, 220, 0, 107, 142, 35, 152, 251, 152, 70, 130, 180, 220, 20, 60, 255, 0, 0, 0, 0, 142, 0, 0, 70,
-           0, 60, 100, 0, 80, 100, 0, 0, 230, 119, 11, 32]
-zero_pad = 256 * 3 - len(palette)
-for i in range(zero_pad):
-    palette.append(0)
+def fast_hist(a, b, n):
+    k = (a >= 0) & (a < n)
+    return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
 
 
-def colorize_mask(mask):
-    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
-    new_mask.putpalette(palette)
-
-    return new_mask
+def per_class_iu(hist):
+    return np.diag(hist) / (hist.sum(1) + hist.sum(0) - np.diag(hist))
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -74,9 +66,13 @@ def get_arguments():
     parser.add_argument("--source", type=str, default=SOURCE)
     parser.add_argument("--target", type=str, default=TARGET)
     parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
-                        help="Path to the directory containing the Cityscapes dataset.")
+                        help="Path to the directory containing the source dataset.")
     parser.add_argument("--data-list", type=str, default=DATA_LIST_PATH,
-                        help="Path to the file listing the images in the dataset.")
+                        help="Path to the file listing the images in the source dataset.")
+    parser.add_argument("--data-dir-target", type=str, default=DATA_DIRECTORY_TARGET,
+                        help="Path to the directory containing the target dataset.")
+    parser.add_argument("--data-list-target", type=str, default=DATA_LIST_PATH_TARGET,
+                        help="Path to the file listing the images in the target dataset.")
     parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
                         help="The index of the label to ignore during the training.")
     parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
@@ -85,8 +81,6 @@ def get_arguments():
                              help="Number of images sent to the network in one step.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
-    parser.add_argument("--save", type=str, default=SAVE_PATH,
-                        help="Path to save result.")
     parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
                         help="Save summaries and checkpoint every often.")
     parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
@@ -113,14 +107,14 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    input_size = [1024, 512]
+    input_size = (1024, 512)
+
+    name_classes = np.asarray(['Sky', 'Building', 'Road', 'Sidewalk', 'Fence', 'Vegetation', 'Pole', 'Car',
+                               'Traffic Sign', 'Pedestrian', 'Bicycle', 'Lanemarking', 'Traffic Light'])
 
     """Create the model and start the evaluation process."""
 
     args = get_arguments()
-
-    if not os.path.exists(args.save):
-        os.makedirs(args.save)
 
     model = Deeplab_DM(args=args)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
@@ -136,6 +130,8 @@ def main():
             elif args.memory:
                 saved_state_dict = torch.load('./snapshots/source_only_DM/' + str(args.source) + '_'
                                               + str((files + 1) * args.save_pred_every) + '.pth')
+                # saved_state_dict = torch.load('./snapshots/source_only_DM/' + str(args.source) + '_'
+                #                               + str(150000) + '.pth')
             else:
                 saved_state_dict = torch.load('./snapshots/source_only/' + str(args.source) + '_'
                                               + str((files + 1) * args.save_pred_every) + '.pth')
@@ -186,52 +182,71 @@ def main():
         model = model.to(device)
 
         model.eval()
-        if args.target == 'CityScapes':
-            testloader = data.DataLoader(
-                cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
-                                  mirror=False, set=args.set),
-                                  batch_size=1, shuffle=False, pin_memory=True)
-        elif args.target == 'Synthia': #SYNTHIA dataloader 필요!!!---------------------------------------------------------------------------------------------
-            testloader = data.DataLoader(
-                cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
-                                  mirror=False, set=args.set),
-                                  batch_size=1, shuffle=False, pin_memory=True)
-        else:
-            raise NotImplementedError('Unavailable target domain')
+        if TRAIN_VAL:
+            train_val_loader = torch.utils.data.DataLoader(
+                SYNTHIADataSet(args.data_dir, args.data_list,
+                               max_iters=None,
+                               crop_size=input_size,
+                               scale=False, mirror=False,
+                               mean=IMG_MEAN, set=args.set),
+                batch_size=args.batch_size, shuffle=False, pin_memory=True)
 
+            hist = np.zeros((args.num_classes, args.num_classes))
+            for i, data in enumerate(train_val_loader):
+                images_val, labels, _, _ = data
+                images_val, labels = images_val.to(device), labels.to(device)
+                if args.warper and args.memory:
+                    pred_warped, _, pred, _ = model(images_val, input_size)
+                elif args.warper:
+                    _, pred_warped, _, pred = model(images_val, input_size)
+                elif args.memory:
+                    _, _, pred, _ = model(images_val, input_size)
+                else:
+                    _, _, _, pred = model(images_val, input_size)
+                labels = labels.squeeze()
+                pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
+                _, pred = pred.squeeze().max(dim=0)
 
-        for index, batch in enumerate(testloader):
-            if index % 100 == 0:
-                print('%d processd' % index)
-            image, _, name = batch
-            image = image.to(device)
+                labels = labels.cpu().numpy()
+                pred = pred.cpu().detach().numpy()
 
+                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+            mIoUs = per_class_iu(hist)
+            # for ind_class in range(args.num_classes):
+            #     print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
+            print('===> mIoU (Source): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
+
+        val_val_loader = torch.utils.data.DataLoader(
+            SYNTHIADataSet(args.data_dir_target, args.data_list_target,
+                           max_iters=None,
+                           crop_size=input_size,
+                           scale=False, mirror=False,
+                           mean=IMG_MEAN, set=args.set),
+            batch_size=args.batch_size, shuffle=False, pin_memory=True)
+        hist = np.zeros((args.num_classes, args.num_classes))
+        for i, data in enumerate(val_val_loader):
+            images_val, labels, _, _ = data
+            images_val, labels = images_val.to(device), labels.to(device)
             if args.warper and args.memory:
-                output, _, _, _ = model(image, input_size)
+                pred_warped, _, pred, _ = model(images_val, input_size)
             elif args.warper:
-                _, output, _, _ = model(image, input_size)
+                _, pred_warped, _, pred = model(images_val, input_size)
             elif args.memory:
-                _, _, output, _ = model(image, input_size)
-                # _, _, _, output = model(image, input_size)
+                _, _, pred, _ = model(images_val, input_size)
             else:
-                _, _, _, output = model(image, input_size)
-            output = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(output)
+                _, _, _, pred = model(images_val, input_size)
+            labels = labels.squeeze()
+            pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
+            _, pred = pred.squeeze().max(dim=0)
 
-            output = output.cpu().data[0].numpy()
+            labels = labels.cpu().numpy()
+            pred = pred.cpu().detach().numpy()
 
-            output = output.transpose(1, 2, 0)
-            output = np.asarray(np.argmax(output, axis=2), dtype=np.uint8)
-
-            output_col = colorize_mask(output)
-            output = Image.fromarray(output)
-
-            name = name[0].split('/')[-1]
-
-            if not os.path.exists(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every))):
-                os.makedirs(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every)))
-            output.save(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every), name))
-            output_col.save(os.path.join(args.save, 'step' + str((files + 1) * args.save_pred_every),
-                                         name.split('.')[0] + '_color.png'))
+            hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+        mIoUs = per_class_iu(hist)
+        # for ind_class in range(args.num_classes):
+        #     print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
+        print('===> mIoU (Target): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
 
 
 if __name__ == '__main__':

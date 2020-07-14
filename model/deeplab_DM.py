@@ -199,7 +199,9 @@ class DM(nn.Module):
         self.module_list.append(conv1x1(inplanes, num_classes))
         self.module_list.append(nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
                                               nn.Conv2d(inplanes, num_classes, 1, bias=False),
-                                              nn.ReLU()))
+                                              nn.ReLU()))   # Nonlinear
+        # self.module_list.append(nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
+        #                                       nn.Conv2d(inplanes, num_classes, 1, bias=False)))  # Linear
 
         for i, m in enumerate(self.module_list):
             if i == 0:
@@ -250,7 +252,8 @@ class ResNet_DM(nn.Module):
             for num_dataset in range(len_dataset):
                 DM_name = 'DM' + str(num_dataset + 1)
                 # setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
-                setattr(self, DM_name, DM(2048, num_classes))
+                # setattr(self, DM_name, DM(3072, num_classes))  # with skip connection
+                setattr(self, DM_name, DM(2048, num_classes))  # without skip connection
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -300,17 +303,17 @@ class ResNet_DM(nn.Module):
         if self.memory:
             DM_name = 'DM' + str(self.num_dataset)
 
-            # x3 = torch.cat((x[1], x1[1]), 1)  # concatenate linear(1) outputs
-            x3 = x1[0]  # without skip connection nonlinear(0)/linear(1) output
+            # x3 = torch.cat((x[1], x1[1]), 1)  # with skip connection, concatenate nonlinear(0)/linear(1) outputs
+            x3 = x1[0]  # without skip connection, nonlinear(0)/linear(1) output
 
             x3_1, x3_2 = getattr(self, DM_name)(x3)
             new_x = x2 + x2.view(self.batch_size, self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
                     ((x3_1 - x3_1.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
                      x3_1.view(self.batch_size, self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3))
-            # new_x += x2.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
-            #          (x3_2 - x3_2.view(self.batch_size, -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
-            #          x3_2.view(self.batch_size, -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
-            new_x += functional.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
+            new_x += x2.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
+                     (x3_2 - x3_2.view(self.batch_size, -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
+                     x3_2.view(self.batch_size, -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
+            # new_x += functional.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
             output_both = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
         if self.warper:

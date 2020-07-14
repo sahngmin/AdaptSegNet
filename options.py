@@ -9,8 +9,12 @@ SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
 NUM_STEPS = 300000
 
-dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
-TARGET = 'CityScapes'
+# dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
+# SOURCE = 'GTA5'
+# TARGET = 'CityScapes'
+dataset_dict = {'SEQS-02-SPRING': 0, 'SEQS-04-SPRING': 1, 'SEQS-01-SPRING': 2}
+SOURCE = 'SEQS-02-SPRING'
+TARGET = 'SEQS-04-SPRING'
 SET = 'train'
 NUM_DATASET = dataset_dict[TARGET]
 
@@ -32,21 +36,38 @@ MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
+
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
-DATA_DIRECTORY = '/work/GTA5'
+# DATA_DIRECTORY = '/work/GTA5'
 # DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
 # DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+
+# DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+
+# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
+DATA_DIRECTORY = '/work/SYNTHIA-SEQS-02-SPRING'
+
+DATA_LIST_PATH = './dataset/synthia_seqs_02_spring_list/train.txt'
+
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
+
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-DATA_DIRECTORY_TARGET = '/work/CityScapes'
+# DATA_DIRECTORY_TARGET = '/work/CityScapes'
 # DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
 # DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
-DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+
+# DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+
+# DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
+DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-04-SPRING'
+
+DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_04_spring_list/train.txt'
+
 INPUT_SIZE_TARGET = '1024,512'
 
-NUM_CLASSES = 19
+# NUM_CLASSES = 19
+NUM_CLASSES = 13
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 # RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
@@ -77,8 +98,8 @@ class TrainOptions(BaseOptions):
 
         self.parser.add_argument("--model", type=str, default=MODEL,
                             help="available options : DeepLab")
-        self.parser.add_argument("--target", type=str, default=TARGET,
-                            help="available options : CityScapes, Synthia")
+        self.parser.add_argument("--source", type=str, default=SOURCE)
+        self.parser.add_argument("--target", type=str, default=TARGET)
         self.parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                             help="Number of images sent to the network in one step.")
         self.parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
@@ -137,7 +158,8 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
                             help="Regularisation parameter for L2-loss.")
         self.parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
-        self.parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.")
+        self.parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.",
+                                 default=False)
         self.parser.add_argument("--log-dir", type=str, default=LOG_DIR,
                             help="Path to the directory of log.")
         self.parser.add_argument("--set", type=str, default=SET,
@@ -150,3 +172,4 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
         self.parser.add_argument("--warper", action='store_true', default=WARPER)
         self.parser.add_argument("--feat-warp", default=True)
+
