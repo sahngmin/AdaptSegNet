@@ -27,7 +27,7 @@ TRAIN_VAL = True
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
 
-IMG_MEAN = np.array((76.4177, 76.9393, 84.3837), dtype=np.float32)
+IMG_MEAN = np.array((0, 0, 0), dtype=np.float32)
 
 DATA_DIRECTORY = '/work/SYNTHIA-SEQS-02-SPRING'
 DATA_LIST_PATH = './dataset/synthia_seqs_02_spring_list/val.txt'
