@@ -18,7 +18,7 @@ import os
 import os.path as osp
 from PIL import Image
 
-SOURCE_ONLY = True
+SOURCE_ONLY = False
 MEMORY = True
 WARPER = False
 
@@ -29,19 +29,21 @@ NUM_STEPS_STOP = 150000  # early stopping
 
 IMG_MEAN = np.array((0, 0, 0), dtype=np.float32)
 
-DATA_DIRECTORY = '/work/SYNTHIA-SEQS-02-SPRING'
-DATA_LIST_PATH = './dataset/synthia_seqs_02_spring_list/val.txt'
+DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
+# DATA_DIRECTORY = '/work/SYNTHIA-SEQS-04-SPRING'
+DATA_LIST_PATH = './dataset/synthia_seqs_04_spring_list/val.txt'
 
-DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-04-SPRING'
-DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_04_spring_list/val.txt'
+DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
+# DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-02-SPRING'
+DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_02_spring_list/val.txt'
 
-dataset_dict = {'SEQS-02-SPRING': 0, 'SEQS-04-SPRING': 1, 'SEQS-01-SPRING': 2}
-SOURCE = 'SEQS-02-SPRING'
-TARGET = 'SEQS-04-SPRING'
+dataset_dict = {'SEQS-04-SPRING': 0, 'SEQS-02-SPRING': 1, 'SEQS-01-SPRING': 2}
+SOURCE = 'SEQS-04-SPRING'
+TARGET = 'SEQS-02-SPRING'
 NUM_DATASET = dataset_dict[TARGET]
 
 IGNORE_LABEL = 255
-NUM_CLASSES = 13
+NUM_CLASSES = 11
 BATCH_SIZE = 1
 
 SET = 'val'
@@ -110,7 +112,7 @@ def main():
     input_size = (1024, 512)
 
     name_classes = np.asarray(['Sky', 'Building', 'Road', 'Sidewalk', 'Fence', 'Vegetation', 'Pole', 'Car',
-                               'Traffic Sign', 'Pedestrian', 'Bicycle', 'Lanemarking', 'Traffic Light'])
+                               'Traffic Sign', 'Lanemarking', 'Traffic Light'])
 
     """Create the model and start the evaluation process."""
 
@@ -149,6 +151,9 @@ def main():
                     saved_state_dict = torch.load('./snapshots/single_alignment_DM/' + str(args.source) + 'to'
                                                   + str(args.target) + '_'
                                                   + str((files + 1) * args.save_pred_every) + '.pth')
+                    # saved_state_dict = torch.load('./snapshots/single_alignment_DM/' + str(args.source) + 'to'
+                    #                               + str(args.target) + '_'
+                    #                               + str(150000) + '.pth')
                 else:
                     saved_state_dict = torch.load('./snapshots/single_alignment/' + str(args.source) + 'to'
                                                   + str(args.target) + '_'

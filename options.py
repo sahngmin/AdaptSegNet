@@ -12,9 +12,9 @@ NUM_STEPS = 300000
 # dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
 # SOURCE = 'GTA5'
 # TARGET = 'CityScapes'
-dataset_dict = {'SEQS-02-SPRING': 0, 'SEQS-04-SPRING': 1, 'SEQS-01-SPRING': 2}
-SOURCE = 'SEQS-02-SPRING'
-TARGET = 'SEQS-04-SPRING'
+dataset_dict = {'SEQS-04-SPRING': 0, 'SEQS-02-SPRING': 1, 'SEQS-01-SPRING': 2}
+SOURCE = 'SEQS-04-SPRING'
+TARGET = 'SEQS-02-SPRING'
 SET = 'train'
 NUM_DATASET = dataset_dict[TARGET]
 
@@ -27,7 +27,7 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'LS'
 
-LAMBDA_ADV_TARGET = [0.001, 0.002]
+LAMBDA_ADV_TARGET = [0.005, 0.002]
 LAMBDA_DISTILLATION = 0.1
 
 RANDOM_SEED = 1338
@@ -44,10 +44,10 @@ NUM_WORKERS = 4
 
 # DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 
-# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
-DATA_DIRECTORY = '/work/SYNTHIA-SEQS-02-SPRING'
+DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
+# DATA_DIRECTORY = '/work/SYNTHIA-SEQS-04-SPRING'
 
-DATA_LIST_PATH = './dataset/synthia_seqs_02_spring_list/train.txt'
+DATA_LIST_PATH = './dataset/synthia_seqs_04_spring_list/train.txt'
 
 IGNORE_LABEL = 255
 INPUT_SIZE = '1024,512'
@@ -59,15 +59,15 @@ INPUT_SIZE = '1024,512'
 
 # DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 
-# DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
-DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-04-SPRING'
+DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
+# DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-02-SPRING'
 
-DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_04_spring_list/train.txt'
+DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_02_spring_list/train.txt'
 
 INPUT_SIZE_TARGET = '1024,512'
 
 # NUM_CLASSES = 19
-NUM_CLASSES = 13
+NUM_CLASSES = 11
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 # RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'

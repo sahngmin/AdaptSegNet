@@ -25,6 +25,9 @@ class SYNTHIADataSet(data.Dataset):
             self.img_ids = self.img_ids * int(np.ceil(float(max_iters) / len(self.img_ids)))
         self.files = []
         self.set = set
+        self.id_to_trainid = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5,
+                              7: 6, 8: 7, 9: 8, 12: 9, 15: 10}
+
         # for split in ["train", "val"]:
         for name in self.img_ids:
             img_file = osp.join(self.root, self.set, name)
@@ -50,18 +53,16 @@ class SYNTHIADataSet(data.Dataset):
         if self.set == 'train':
             label = cv2.resize(label, self.crop_size, interpolation=cv2.INTER_NEAREST)
 
-        label[label == 0] = 256
-        label[label == 13] = 256
-        label[label == 14] = 256
-        label[label == 15] = 13
-        label -= 1
+        label_copy = 255 * np.ones(label.shape, dtype=np.float32)
+        for k, v in self.id_to_trainid.items():
+            label_copy[label == k] = v
 
         image = np.asarray(image, np.float32)
         label = np.asarray(label, np.float32)
 
         size = image.shape
         image = image[:, :, ::-1]  # change to BGR
-        image -= self.mean
+        # image -= self.mean
         image = image / 255.0
         image = image.transpose((2, 0, 1))
 
