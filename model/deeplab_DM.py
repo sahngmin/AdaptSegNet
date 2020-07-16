@@ -1,14 +1,17 @@
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
+import torch.nn.functional as F
 import torch
 import numpy as np
-import torch.nn.functional as functional
 from torch.autograd import Variable
 from model.warper import Warper
 from collections import OrderedDict
 import operator
 from itertools import islice
+from .SPADE_pix2pix.models.networks.generator import SPADEGenerator
+from .SPADE_pix2pix.options.train_options import TrainOptions
+
 
 affine_par = True
 
@@ -86,7 +89,6 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes, affine=affine_par)
-        self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = nn.BatchNorm2d(planes, affine=affine_par)
         self.downsample = downsample
@@ -97,7 +99,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        out = F.relu(out, inplace=True)
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -106,7 +108,7 @@ class BasicBlock(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        out = self.relu(out)
+        out = F.relu(out, inplace=True)
 
         return out
 
@@ -131,7 +133,6 @@ class Bottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(planes * 4, affine=affine_par)
         for i in self.bn3.parameters():
             i.requires_grad = False
-        self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -140,11 +141,11 @@ class Bottleneck(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        out = F.relu(out, inplace=True)
 
         out = self.conv2(out)
         out = self.bn2(out)
-        out = self.relu(out)
+        out = F.relu(out, inplace=True)
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -153,7 +154,8 @@ class Bottleneck(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        nonlinear_out = self.relu(out)
+        nonlinear_out = F.relu(out, inplace=True)
+
 
         return [nonlinear_out, out]
 
@@ -215,7 +217,7 @@ class DM(nn.Module):
     def forward(self, x):
         out1 = self.module_list[0](x)
         out2 = self.module_list[1](x)
-        # out2 = functional.interpolate(self.module_list[1](x), size=out1.size()[2:], mode='bilinear', align_corners=True)
+        # out2 = F.interpolate(self.module_list[1](x), size=out1.size()[2:], mode='bilinear', align_corners=True)
         return out1, out2
 
 class ResNet_DM(nn.Module):
@@ -227,13 +229,12 @@ class ResNet_DM(nn.Module):
         self.num_dataset = args.num_dataset
         self.num_classes = num_classes
         self.batch_size = args.batch_size
-
+        self.args = args
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine=affine_par)
         for i in self.bn1.parameters():
             i.requires_grad = False
-        self.relu = nn.ReLU(inplace=True)
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -245,6 +246,16 @@ class ResNet_DM(nn.Module):
 
         if args.warper:
             self.WarpModel = Warper(args=args)
+
+        if args.spadeWarper:
+            # parse options
+            opt = TrainOptions().parse()
+            self.opt = opt
+            self.FloatTensor = torch.cuda.FloatTensor if self.use_gpu() \
+                else torch.FloatTensor
+            self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
+                else torch.ByteTensor
+            self.generator = SPADEGenerator(opt)
 
         if args.memory:
             for num_dataset in range(len_dataset):
@@ -259,6 +270,7 @@ class ResNet_DM(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
         downsample = None
@@ -281,17 +293,16 @@ class ResNet_DM(nn.Module):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
 
-    def forward(self, image, input_size, map=None):
+    def forward(self, input, input_size, label=None):
         output_both_warped, output_ori_warped, output_both, output_ori = None, None, None, None
 
-        x = self.conv1(image)
+        x = self.conv1(input)
         x = self.bn1(x)
-        x = self.relu(x)
+        x = F.relu(x, inplace=True)
         x = self.maxpool(x)
         x = self.layer1([x])
         x = self.layer2(x)
         x = self.layer3(x)
-
         x1 = self.layer4(x)
 
         x2 = self.layer6(x1[0])
@@ -310,12 +321,12 @@ class ResNet_DM(nn.Module):
             # new_x += x2.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
             #          (x3_2 - x3_2.view(self.batch_size, -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
             #          x3_2.view(self.batch_size, -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
-            new_x += functional.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
+            new_x += F.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
             output_both = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
         if self.warper:
-            if map is not None:
-                warper, warp_list = self.WarpModel(image, map)
+            if label is not None:
+                warper, warp_list = self.WarpModel(input, label)
             else:
                 # x2_softmax = nn.Softmax()(x2_up)
                 # x2_filtered = self.threshold(x2_softmax)
@@ -327,6 +338,15 @@ class ResNet_DM(nn.Module):
                 else:
                     warper, warp_list = self.WarpModel(output_both, None)
                     output_both_warped = self.warp(output_both, warper)
+
+        if self.args.spadeWarper:
+            edge_map = self.preprocess_input(input, label)
+            warper = self.generator(edge_map)
+
+            if not self.memory:
+                output_ori_warped = self.warp(output_ori, warper)
+            else:
+                output_both_warped = self.warp(output_both, warper)
 
         return output_both_warped, output_ori_warped, output_both, output_ori
 
@@ -427,10 +447,40 @@ class ResNet_DM(nn.Module):
         for i in range(warper.size(1) // 2):
             sampler = 0.2 * nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
             sampler = sampler.clamp(min=-1, max=1)
-        sampled = functional.grid_sample(input, sampler)
+        sampled = F.grid_sample(input, sampler)
 
         return sampled
 
+    def preprocess_input(self, image, map):
+        # move to GPU and change data types
+        label_map = map.unsqueeze(1)
+
+        # create one-hot label map
+        # torch.Size([1, 184, 256, 256])
+        bs, _, h, w = label_map.size()
+        nc = self.opt.semantic_nc
+        input_label = self.FloatTensor(bs, nc, h, w).zero_()
+        label_map[label_map == 255] = 19
+        input_semantics = input_label.scatter_(1, label_map, 1.0)
+
+        # instance_label = False
+        # if instance_label:
+        #     inst_map = image
+        #     instance_edge_map = self.get_edges(inst_map)
+        #     input_semantics = torch.cat((input_semantics, instance_edge_map), dim=1)
+
+        return input_semantics
+
+    # def get_edges(self, t):
+    #     edge = self.ByteTensor(t.size()).zero_()
+    #     edge[:, :, :, 1:] = edge[:, :, :, 1:] | (t[:, :, :, 1:] != t[:, :, :, :-1])
+    #     edge[:, :, :, :-1] = edge[:, :, :, :-1] | (t[:, :, :, 1:] != t[:, :, :, :-1])
+    #     edge[:, :, 1:, :] = edge[:, :, 1:, :] | (t[:, :, 1:, :] != t[:, :, :-1, :])
+    #     edge[:, :, :-1, :] = edge[:, :, :-1, :] | (t[:, :, 1:, :] != t[:, :, :-1, :])
+    #     return edge.float()
+
+    def use_gpu(self):
+        return len(self.opt.gpu_ids) > 0
 
 def Deeplab_DM(args=None):
     model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset)

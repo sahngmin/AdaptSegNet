@@ -3,6 +3,7 @@ import argparse
 SOURCE_ONLY = False
 MEMORY = False
 WARPER = True
+SPADE_WARPER = False
 FROM_SCRATCH = False
 
 SAVE_PRED_EVERY = 5000
@@ -151,3 +152,6 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--warper", action='store_true', default=WARPER)
         self.parser.add_argument("--feat-warp", default=True)
         self.parser.add_argument("--multi_gpu", default=False)
+        self.parser.add_argument("--spadeWarper", default=SPADE_WARPER)
+
+

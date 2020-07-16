@@ -65,7 +65,8 @@ class GTA5DataSet(data.Dataset):
 
         size = image.shape
         image = image[:, :, ::-1]  # change to BGR
-        image -= self.mean
+        # image -= self.mean
+        image = image / 255.0
         image = image.transpose((2, 0, 1))
 
         return image.copy(), label_copy.copy(), np.array(size), name

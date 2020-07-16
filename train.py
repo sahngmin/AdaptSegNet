@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.utils import data, model_zoo
 import numpy as np
 import torch.optim as optim
-import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import sys
 import os
@@ -22,6 +21,11 @@ from utils.model_save import save_model
 from torch.nn import DataParallel
 
 
+torch.manual_seed(0) # cpu 연산 무작위 고정
+torch.cuda.manual_seed(0) # gpu 연산 무작위 고정
+torch.cuda.manual_seed_all(0) # 멀티 gpu 연산 무작위 고정
+torch.backends.cudnn.enabled = False # cudnn library를 사용하지 않게 만듬
+np.random.seed(0) # numpy 관련 연산 무작위 고정
 
 PRE_TRAINED_SEG = './snapshots/OLD/Scratch_warper/single_level/GTA5_75000.pth'
 # PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
@@ -70,13 +74,15 @@ def main():
     random.seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
+
     w, h = map(int, args.input_size.split(','))
     input_size = (w, h)
 
     w, h = map(int, args.input_size_target.split(','))
     input_size_target = (w, h)
 
-    cudnn.enabled = True
+    # cudnn.enabled = True
 
     # Create network
     model = Deeplab_DM(args=args)
@@ -186,7 +192,7 @@ def main():
         for params in ref_model.parameters():
             params.requires_grad = False
 
-    cudnn.benchmark = True
+    # cudnn.benchmark = True
     optimizer.zero_grad()
 
     if args.warper:
@@ -246,6 +252,8 @@ def main():
             pred_warped, _, pred, pred_ori = model(images, input_size)
         elif args.warper:
             _, pred_warped, _, pred = model(images, input_size)
+        elif args.spadeWarper:
+            _, pred_warped, _, pred = model(images, input_size, labels)
         elif args.memory:
             _, _, pred, pred_ori = model(images, input_size)
         else:
