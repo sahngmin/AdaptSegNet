@@ -44,8 +44,8 @@ NUM_WORKERS = 4
 
 # DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 
-DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
-# DATA_DIRECTORY = '/work/SYNTHIA-SEQS-04-SPRING'
+# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
+DATA_DIRECTORY = '/work/SYNTHIA-SEQS-04-SPRING'
 
 DATA_LIST_PATH = './dataset/synthia_seqs_04_spring_list/train.txt'
 
@@ -59,8 +59,8 @@ INPUT_SIZE = '1024,512'
 
 # DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 
-DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
-# DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-02-SPRING'
+# DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
+DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-02-SPRING'
 
 DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_02_spring_list/train.txt'
 

@@ -53,12 +53,12 @@ class SYNTHIADataSet(data.Dataset):
         if self.set == 'train':
             label = cv2.resize(label, self.crop_size, interpolation=cv2.INTER_NEAREST)
 
+        image = np.asarray(image, np.float32)
+        label = np.asarray(label, np.float32)
+
         label_copy = 255 * np.ones(label.shape, dtype=np.float32)
         for k, v in self.id_to_trainid.items():
             label_copy[label == k] = v
-
-        image = np.asarray(image, np.float32)
-        label = np.asarray(label, np.float32)
 
         size = image.shape
         image = image[:, :, ::-1]  # change to BGR
@@ -66,7 +66,7 @@ class SYNTHIADataSet(data.Dataset):
         image = image / 255.0
         image = image.transpose((2, 0, 1))
 
-        return image.copy(), label.copy(), np.array(size), name
+        return image.copy(), label_copy, np.array(size), name
 
 
 if __name__ == '__main__':

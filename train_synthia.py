@@ -429,65 +429,65 @@ def main():
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
-            # print('checking validation accuracy ...')
-            # train_val_loader = torch.utils.data.DataLoader(SYNTHIADataSet(args.data_dir, './dataset/synthia_seqs_04_spring_list/val.txt',
-            #                                              max_iters=None,
-            #                                              crop_size=input_size,
-            #                                              scale=False, mirror=False,
-            #                                              mean=IMG_MEAN, set='val'),
-            #                               batch_size=args.batch_size, shuffle=False, pin_memory=True)
-            # hist = np.zeros((args.num_classes, args.num_classes))
-            # for i, data in enumerate(train_val_loader):
-            #     images_val, labels, _, _ = data
-            #     images_val, labels = images_val.to(device), labels.to(device)
-            #     if args.warper and args.memory:
-            #         pred_warped, _, pred, _ = model(images_val, input_size)
-            #     elif args.warper:
-            #         _, pred_warped, _, pred = model(images_val, input_size)
-            #     elif args.memory:
-            #         _, _, pred, _ = model(images_val, input_size)
-            #     else:
-            #         _, _, _, pred = model(images_val, input_size)
-            #     labels = labels.squeeze()
-            #     pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-            #     _, pred = pred.squeeze().max(dim=0)
-            #
-            #     labels = labels.cpu().numpy()
-            #     pred = pred.cpu().detach().numpy()
-            #
-            #     hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            # mIoUs = per_class_iu(hist)
-            # print('===> mIoU (Source): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
-            #
-            # val_val_loader = torch.utils.data.DataLoader(
-            #     SYNTHIADataSet(args.data_dir_target, './dataset/synthia_seqs_02_spring_list/val.txt',
-            #                    max_iters=None,
-            #                    crop_size=input_size,
-            #                    scale=False, mirror=False,
-            #                    mean=IMG_MEAN, set='val'),
-            #     batch_size=args.batch_size, shuffle=False, pin_memory=True)
-            # hist = np.zeros((args.num_classes, args.num_classes))
-            # for i, data in enumerate(val_val_loader):
-            #     images_val, labels, _, _ = data
-            #     images_val, labels = images_val.to(device), labels.to(device)
-            #     if args.warper and args.memory:
-            #         pred_warped, _, pred, _ = model(images_val, input_size)
-            #     elif args.warper:
-            #         _, pred_warped, _, pred = model(images_val, input_size)
-            #     elif args.memory:
-            #         _, _, pred, _ = model(images_val, input_size)
-            #     else:
-            #         _, _, _, pred = model(images_val, input_size)
-            #     labels = labels.squeeze()
-            #     pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-            #     _, pred = pred.squeeze().max(dim=0)
-            #
-            #     labels = labels.cpu().numpy()
-            #     pred = pred.cpu().detach().numpy()
-            #
-            #     hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            # mIoUs = per_class_iu(hist)
-            # print('===> mIoU (Target): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
+            print('checking validation accuracy ...')
+            train_val_loader = torch.utils.data.DataLoader(SYNTHIADataSet(args.data_dir, './dataset/synthia_seqs_04_spring_list/val.txt',
+                                                         max_iters=None,
+                                                         crop_size=input_size,
+                                                         scale=False, mirror=False,
+                                                         mean=IMG_MEAN, set='val'),
+                                          batch_size=args.batch_size, shuffle=False, pin_memory=True)
+            hist = np.zeros((args.num_classes, args.num_classes))
+            for i, data in enumerate(train_val_loader):
+                images_val, labels, _, _ = data
+                images_val, labels = images_val.to(device), labels.to(device)
+                if args.warper and args.memory:
+                    pred_warped, _, pred, _ = model(images_val, input_size)
+                elif args.warper:
+                    _, pred_warped, _, pred = model(images_val, input_size)
+                elif args.memory:
+                    _, _, pred, _ = model(images_val, input_size)
+                else:
+                    _, _, _, pred = model(images_val, input_size)
+                labels = labels.squeeze()
+                pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
+                _, pred = pred.squeeze().max(dim=0)
+
+                labels = labels.cpu().numpy()
+                pred = pred.cpu().detach().numpy()
+
+                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+            mIoUs = per_class_iu(hist)
+            print('===> mIoU (Source): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
+
+            val_val_loader = torch.utils.data.DataLoader(
+                SYNTHIADataSet(args.data_dir_target, './dataset/synthia_seqs_02_spring_list/val.txt',
+                               max_iters=None,
+                               crop_size=input_size,
+                               scale=False, mirror=False,
+                               mean=IMG_MEAN, set='val'),
+                batch_size=args.batch_size, shuffle=False, pin_memory=True)
+            hist = np.zeros((args.num_classes, args.num_classes))
+            for i, data in enumerate(val_val_loader):
+                images_val, labels, _, _ = data
+                images_val, labels = images_val.to(device), labels.to(device)
+                if args.warper and args.memory:
+                    pred_warped, _, pred, _ = model(images_val, input_size)
+                elif args.warper:
+                    _, pred_warped, _, pred = model(images_val, input_size)
+                elif args.memory:
+                    _, _, pred, _ = model(images_val, input_size)
+                else:
+                    _, _, _, pred = model(images_val, input_size)
+                labels = labels.squeeze()
+                pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
+                _, pred = pred.squeeze().max(dim=0)
+
+                labels = labels.cpu().numpy()
+                pred = pred.cpu().detach().numpy()
+
+                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+            mIoUs = per_class_iu(hist)
+            print('===> mIoU (Target): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
 
             print('taking snapshot ...')
             if args.source_only:
