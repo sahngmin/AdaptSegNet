@@ -10,10 +10,14 @@ SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
 NUM_STEPS = 150000
 
-dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
+dataset_list = ['GTA5', 'CityScapes']
 TARGET = 'CityScapes'
 SET = 'train'
-NUM_DATASET = dataset_dict[TARGET]
+NUM_DATASET = len(dataset_list)
+
+SAVE_DIR_NAME = 'single_alignment_warper'
+SEGNET_NAME = 'checkpoint'
+WARPER_NAME = 'SPADE'
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -153,5 +157,9 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--feat-warp", default=True)
         self.parser.add_argument("--multi_gpu", default=False)
         self.parser.add_argument("--spadeWarper", default=SPADE_WARPER)
+
+        self.parser.add_argument("--dir_name", default=SAVE_DIR_NAME)
+        self.parser.add_argument("--segnet_name", default=SEGNET_NAME)
+        self.parser.add_argument("--warper_name", default=WARPER_NAME)
 
 

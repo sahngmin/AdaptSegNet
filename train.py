@@ -10,7 +10,7 @@ import os.path as osp
 import random
 from tensorboardX import SummaryWriter
 import copy
-from options import TrainOptions, dataset_dict
+from options import TrainOptions, dataset_list
 from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator
 from dataset.gta5_dataset import GTA5DataSet
@@ -86,6 +86,7 @@ def main():
 
     # Create network
     model = Deeplab_DM(args=args)
+
     model_D = None
 
     if args.source_only:  # training model from pre-trained ResNet on source domain
@@ -179,7 +180,7 @@ def main():
     if args.multi_gpu:
         model = DataParallel(model)
         # implement model.optim_parameters(args) to handle different models' lr setting
-        optimizer = optim.SGD(model.parameters_seg_multi(args),
+        optimizer = optim.SGD(model.module.parameters_seg_multi(args),
                               lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     else:
         model.to(device)
@@ -195,8 +196,12 @@ def main():
     # cudnn.benchmark = True
     optimizer.zero_grad()
 
-    if args.warper:
-        optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
+    if (args.warper or args.spadeWarper):
+        if args.multi_gpu:
+            optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
+        else:
+            optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
+
         optimizer_warp.zero_grad()
 
     seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
@@ -232,7 +237,7 @@ def main():
             optimizer_D.zero_grad()
             adjust_learning_rate_D(optimizer_D, i_iter)
 
-        if args.warper:
+        if (args.warper or args.spadeWarper):
             optimizer_warp.zero_grad()
             adjust_learning_rate(optimizer_warp, i_iter, args)
 
@@ -248,7 +253,7 @@ def main():
         images = images.to(device)
         labels = labels.long().to(device)
 
-        if args.warper and args.memory:
+        if (args.warper or args.spadeWarper) and args.memory:
             pred_warped, _, pred, pred_ori = model(images, input_size)
         elif args.warper:
             _, pred_warped, _, pred = model(images, input_size)
@@ -278,7 +283,7 @@ def main():
 
             if args.warper and args.memory:
                 pred_target_warped, _, pred_target, _ = model(images_target, input_size)
-            elif args.warper:
+            elif (args.warper or args.spadeWarper):
                 _, pred_target_warped, _, pred_target = model(images_target, input_size)
             elif args.memory:
                 _, _, pred_target, _ = model(images_target, input_size)
@@ -360,7 +365,7 @@ def main():
                 i_iter, args.num_steps, loss_seg_value_before_warped, loss_seg_value_after_warped, loss_distillation_value,
                 loss_adv_target_value, loss_D_value))
 
-        state = save_model(i_iter, args, model, model_D)
+        state = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp)
         if state:
             break
 

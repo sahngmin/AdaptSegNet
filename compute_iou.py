@@ -6,7 +6,7 @@ import random
 from PIL import Image
 from os.path import join
 from model.deeplab_DM import Deeplab_DM
-from options import TrainOptions, dataset_dict
+from options import TrainOptions, dataset_list
 
 
 SAVE_PRED_EVERY = 5000
@@ -68,9 +68,6 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     for ind in range(len(gt_imgs)):
         pred = np.array(Image.open(pred_imgs[ind]))
         label = np.array(Image.open(gt_imgs[ind]))
-
-        label_img = torch.Tensor(label).unsqueeze(0)
-        _, warped, _, output = model(label_img)
 
         label = label_mapping(label, mapping)
         if len(label.flatten()) != len(pred.flatten()):
