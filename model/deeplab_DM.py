@@ -221,7 +221,7 @@ class DM(nn.Module):
         return out1, out2
 
 class ResNet_DM(nn.Module):
-    def __init__(self, block, layers, num_classes, args=None, len_dataset=None):
+    def __init__(self, block, layers, num_classes, args=None, len_dataset=None, device='cpu'):
         super(ResNet_DM, self).__init__()
         self.memory = args.memory
         self.warper = args.warper
@@ -229,6 +229,7 @@ class ResNet_DM(nn.Module):
         self.num_dataset = args.num_dataset
         self.num_classes = num_classes
         self.batch_size = args.batch_size
+        self.device = device
         self.args = args
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -255,7 +256,7 @@ class ResNet_DM(nn.Module):
                 else torch.FloatTensor
             self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
                 else torch.ByteTensor
-            self.generator = SPADEGenerator(opt)
+            self.WarpModel = SPADEGenerator(opt)
 
         if args.memory:
             for num_dataset in range(len_dataset):
@@ -306,7 +307,6 @@ class ResNet_DM(nn.Module):
 
         x2 = self.layer6(x1[0])
         output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
-
         if self.memory:
             DM_name = 'DM' + str(self.num_dataset)
 
@@ -339,8 +339,13 @@ class ResNet_DM(nn.Module):
                     output_both_warped = self.warp(output_both, warper)
 
         if self.args.spadeWarper:
+            if label is None:
+                confidence = F.softmax(output_ori, dim=1)
+                _, topk = torch.topk(confidence, 1, dim=1)
+                label = topk.squeeze(1).to(self.device)
+
             edge_map = self.preprocess_input(input, label)
-            warper = self.generator(edge_map)
+            warper = self.WarpModel(edge_map)
 
             if not self.memory:
                 output_ori_warped = self.warp(output_ori, warper)
@@ -431,16 +436,13 @@ class ResNet_DM(nn.Module):
         optim_parameters = [{'params': self.WarpModel.parameters(), 'lr': 10 * args.learning_rate}]
         return optim_parameters
 
-    @staticmethod
-    def warp(input, warper):
-
+    def warp(self, input, warper):
         xs1 = np.linspace(-1, 1, input.size(2))
         xs2 = np.linspace(-1, 1, input.size(3))
         xs = np.meshgrid(xs2, xs1)
         xs = np.stack(xs, 2)
         xs = torch.Tensor(xs).unsqueeze(0).repeat(input.size(0), 1, 1, 1)
-        if torch.cuda.is_available():
-            xs = xs.cuda()
+        xs = xs.to(self.device)
 
         sampled = torch.zeros(input.size()).cuda()
         for i in range(warper.size(1) // 2):
@@ -481,8 +483,8 @@ class ResNet_DM(nn.Module):
     def use_gpu(self):
         return len(self.opt.gpu_ids) > 0
 
-def Deeplab_DM(args=None):
-    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset)
+def Deeplab_DM(args=None, device='cpu'):
+    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset, device=device)
     return model
 
 

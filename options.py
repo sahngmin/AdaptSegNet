@@ -2,9 +2,9 @@ import argparse
 
 SOURCE_ONLY = False
 MEMORY = False
-WARPER = True
-SPADE_WARPER = False
-FROM_SCRATCH = False
+WARPER = False
+SPADE_WARPER = True
+FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
@@ -51,7 +51,7 @@ DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
 
-NUM_CLASSES = 19
+NUM_CLASSES = 19 + 1
 
 # RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'

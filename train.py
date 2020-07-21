@@ -85,7 +85,7 @@ def main():
     # cudnn.enabled = True
 
     # Create network
-    model = Deeplab_DM(args=args)
+    model = Deeplab_DM(args=args, device=device)
     optimizer = optim.SGD(model.parameters_seg(args),
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     if (args.warper or args.spadeWarper):
@@ -199,7 +199,7 @@ def main():
     if (args.warper or args.spadeWarper):
         optimizer_warp.zero_grad()
 
-    seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
+    seg_loss = torch.nn.CrossEntropyLoss(ignore_index=19)
 
     # set up tensor board
     if args.tensorboard:
@@ -271,70 +271,69 @@ def main():
 
         loss.backward()
 
-        if not args.source_only:
-            _, batch = targetloader_iter.__next__()
-            images_target, _, _ = batch
-            images_target = images_target.to(device)
+        _, batch = targetloader_iter.__next__()
+        images_target, _, _ = batch
+        images_target = images_target.to(device)
 
-            if args.warper and args.memory:
-                pred_target_warped, _, pred_target, _ = model(images_target, input_size)
-            elif (args.warper or args.spadeWarper):
-                _, pred_target_warped, _, pred_target = model(images_target, input_size)
-            elif args.memory:
-                _, _, pred_target, _ = model(images_target, input_size)
-            else:
-                _, _, _, pred_target = model(images_target, input_size)
+        if args.warper and args.memory:
+            pred_target_warped, _, pred_target, _ = model(images_target, input_size)
+        elif (args.warper or args.spadeWarper):
+            _, pred_target_warped, _, pred_target = model(images_target, input_size)
+        elif args.memory:
+            _, _, pred_target, _ = model(images_target, input_size)
+        else:
+            _, _, _, pred_target = model(images_target, input_size)
+
+
+        D_out = model_D(F.softmax(pred_target, dim=1))
+
+        if args.gan == 'Hinge':
+            loss_adv_target = adversarial_loss(pred_target, generator=True)
+
+        else:
+            loss_adv_target = bce_loss(D_out,
+                                       torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+
+        loss = args.lambda_adv_target[args.num_dataset - 1] * loss_adv_target
+        loss_adv_target_value += loss_adv_target.item()
+        loss.backward()
+
+        # train D
+
+        # bring back requires_grad
+        for param in model_D.parameters():
+            param.requires_grad = True
+
+        # train with source
+        pred = pred.detach()
+
+        # train with target
+        pred_target = pred_target.detach()
+
+        if args.gan == 'Hinge':
+            loss_D = adversarial_loss(pred_target, pred, generator=False)
+
+        else:
+            D_out = model_D(F.softmax(pred, dim=1))
+
+            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+            loss_D = loss_D / 2
+
+            loss_D.backward()
+
+            loss_D_value += loss_D.item()
+
 
 
             D_out = model_D(F.softmax(pred_target, dim=1))
 
-            if args.gan == 'Hinge':
-                loss_adv_target = adversarial_loss(pred_target, generator=True)
+            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
 
-            else:
-                loss_adv_target = bce_loss(D_out,
-                                           torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
-
-            loss = args.lambda_adv_target[args.num_dataset - 1] * loss_adv_target
-            loss_adv_target_value += loss_adv_target.item()
-            loss.backward()
-
-            # train D
-
-            # bring back requires_grad
-            for param in model_D.parameters():
-                param.requires_grad = True
-
-            # train with source
-            pred = pred.detach()
-
-            # train with target
-            pred_target = pred_target.detach()
-
-            if args.gan == 'Hinge':
-                loss_D = adversarial_loss(pred_target, pred, generator=False)
-
-            else:
-                D_out = model_D(F.softmax(pred, dim=1))
-
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
-                loss_D = loss_D / 2
-
-                loss_D.backward()
-
-                loss_D_value += loss_D.item()
+            loss_D = loss_D / 2
 
 
-
-                D_out = model_D(F.softmax(pred_target, dim=1))
-
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
-
-                loss_D = loss_D / 2
-
-
-            loss_D.backward()
-            loss_D_value += loss_D.item()
+        loss_D.backward()
+        loss_D_value += loss_D.item()
 
         optimizer.step()
         if not args.source_only:

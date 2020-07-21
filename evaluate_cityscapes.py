@@ -134,7 +134,9 @@ def main():
     if not os.path.exists(args.save):
         os.makedirs(args.save)
 
-    model = Deeplab_DM(args=args)
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+
+    model = Deeplab_DM(args=args, device=device)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
 
@@ -190,18 +192,18 @@ def main():
                 new_params[i] = saved_state_dict[i]
         model.load_state_dict(new_params)
 
-        device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+
         model = model.to(device)
 
         model.eval()
         if args.target == 'CityScapes':
             testloader = data.DataLoader(
-                cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
+                cityscapesDataSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN, scale=False,
                                   mirror=False, set=args.set),
                                   batch_size=1, shuffle=False, pin_memory=True)
         elif args.target == 'Synthia': #SYNTHIA dataloader 필요!!!---------------------------------------------------------------------------------------------
             testloader = data.DataLoader(
-                cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False,
+                cityscapesDataSet(args.data_dir, args.data_list, crop_size=input_size, mean=IMG_MEAN, scale=False,
                                   mirror=False, set=args.set),
                                   batch_size=1, shuffle=False, pin_memory=True)
         else:

@@ -59,7 +59,7 @@ class GTA5DataSet(data.Dataset):
         label = np.asarray(label, np.float32)
 
         # re-assign labels to match the format of Cityscapes
-        label_copy = 255 * np.ones(label.shape, dtype=np.float32)
+        label_copy = len(self.id_to_trainid) * np.ones(label.shape, dtype=np.float32)
         for k, v in self.id_to_trainid.items():
             label_copy[label == k] = v
 

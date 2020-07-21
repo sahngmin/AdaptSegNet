@@ -43,7 +43,7 @@ class SkipConnectionEncode(nn.Module):
         self.num_layers = num_layers
         down_list = list()
         if args.feat_warp:
-            in_channel = 19
+            in_channel = 20
         else:
             in_channel = 3
         down_list.append(EncoderInput(in_channel, 64, self.use_bias))

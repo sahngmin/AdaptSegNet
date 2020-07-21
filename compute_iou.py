@@ -40,7 +40,7 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     opt = TrainOptions().parse()
 
 
-    model = Deeplab_DM(args=opt)
+    model = Deeplab_DM(args=opt, device=device)
 
     new_params = model.state_dict().copy()
     for i in saved_state_dict:
