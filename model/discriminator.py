@@ -35,7 +35,7 @@ class FCDiscriminator(nn.Module):
 
 
 class SpectralConvolution(nn.Module):
-	def __init__(self, in_ch, out_ch, kernel_size, stride, padding, bias):
+	def __init__(self, in_ch, out_ch, kernel_size, stride, padding, bias=True):
 		super(SpectralConvolution, self).__init__()
 		self.l = nn.utils.spectral_norm(nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias))
 

@@ -125,7 +125,7 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    input_size = [1024, 512]
+    input_size = [512, 256]
 
     """Create the model and start the evaluation process."""
 

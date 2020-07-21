@@ -44,7 +44,7 @@ def adjust_learning_rate(optimizer, i_iter, args):
     lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) > 1:
-        if args.num_dataset == 1:
+        if args.num_dataset == 2:
             for i in range(1, len(optimizer.param_groups)):
                 optimizer.param_groups[i]['lr'] = lr * 10
         else:
@@ -89,7 +89,7 @@ def main():
     optimizer = optim.SGD(model.parameters_seg(args),
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     if (args.warper or args.spadeWarper):
-        optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
+        optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
 
     # model_D = FCDiscriminator(num_classes=args.num_classes)
     model_D = SpectralDiscriminator(num_classes=args.num_classes)
@@ -112,7 +112,7 @@ def main():
         model_D = DataParallel(model_D)
 
         # implement model.optim_parameters(args) to handle different models' lr setting
-        optimizer = optim.SGD(model.module.parameters_seg_multi(args),
+        optimizer = optim.SGD(model.module.parameters_seg(args),
                               lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
         optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
         if (args.warper or args.spadeWarper):
