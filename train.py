@@ -12,12 +12,12 @@ from tensorboardX import SummaryWriter
 import copy
 from options import TrainOptions, dataset_list
 from model.deeplab_DM import Deeplab_DM
-from model.discriminator import FCDiscriminator
+from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.synthia_dataset import synthiaDataset
 from utils.tsne_plot import TSNE_plot
-from utils.model_save import save_model
+from utils.custom_function import save_model, load_existing_state_dict
 from torch.nn import DataParallel
 
 
@@ -86,107 +86,107 @@ def main():
 
     # Create network
     model = Deeplab_DM(args=args)
+    optimizer = optim.SGD(model.parameters_seg(args),
+                          lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+    if (args.warper or args.spadeWarper):
+        optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
 
-    model_D = None
+    # model_D = FCDiscriminator(num_classes=args.num_classes)
+    model_D = SpectralDiscriminator(num_classes=args.num_classes)
+    optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
 
-    if args.source_only:  # training model from pre-trained ResNet on source domain
-        if args.restore_from_resnet[:4] == 'http':
-            saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
-        else:
-            saved_state_dict = torch.load(args.restore_from_resnet)
 
-        new_params = model.state_dict().copy()
-        for i in saved_state_dict:
-            # Scale.layer5.conv2d_list.3.weight
-            i_parts = i.split('.')
-            if not i_parts[1] == 'layer5':
-                new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-        model.load_state_dict(new_params)
-    else:
-        if args.from_scratch:  # training model from pre-trained ResNet on source & target domain
-            if args.restore_from_resnet[:4] == 'http':
-                saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
-            else:
-                saved_state_dict = torch.load(args.restore_from_resnet)
-
-            new_params = model.state_dict().copy()
-            for i in saved_state_dict:
-                # Scale.layer5.conv2d_list.3.weight
-                i_parts = i.split('.')
-                if not i_parts[1] == 'layer5':
-                    new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-            model.load_state_dict(new_params)
-        else:  # training model from pre-trained DeepLab on source & target domain
-            saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
-            new_params = model.state_dict().copy()
-            for i in saved_state_dict:
-                if i in new_params.keys():
-                    new_params[i] = saved_state_dict[i]
-            model.load_state_dict(new_params)
-
-        model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
-
-        if PRE_TRAINED_DISC is not None:
-            saved_state_dict_D = torch.load(PRE_TRAINED_DISC, map_location=device)
-            new_params = model_D.state_dict().copy()
-            for i in saved_state_dict_D:
-                if i in new_params.keys():
-                    new_params[i] = saved_state_dict_D[i]
-            model_D.load_state_dict(new_params)
-
-        model_D.train()
-        if args.multi_gpu:
-            model_D = DataParallel(model_D)
-            optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-        else:
-            model_D.to(device)
-            optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-
-        if args.target == 'CityScapes':
-            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                             set=args.set),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
-        elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
-            targetloader = data.DataLoader(
-                synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt',
-                               max_iters=args.num_steps * args.batch_size,
-                               crop_size=input_size_target,
-                               scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                               set=args.set),
-                batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                pin_memory=True)
-        else:
-            raise NotImplementedError('Unavailable target domain')
-
-        targetloader_iter = enumerate(targetloader)
-
-        optimizer_D.zero_grad()
-
-        if args.gan == 'Vanilla':
-            bce_loss = torch.nn.BCEWithLogitsLoss()
-        elif args.gan == 'LS':
-            bce_loss = torch.nn.MSELoss()
-
-        # labels for adversarial training
-        source_label = 0
-        target_label = 1
-
-    model.train()
+    checkpoint = None
+    if checkpoint is not None:
+        checkpoint_file = torch.load(checkpoint)
+        model = load_existing_state_dict(model, checkpoint_file['state_dict_seg'])
+        model_D = load_existing_state_dict(model_D, checkpoint_file['discriminator'])
+        optimizer = load_existing_state_dict(optimizer, checkpoint_file['optimizer_seg'])
+        optimizer_D = load_existing_state_dict(optimizer_D, checkpoint_file['optimizer_disc'])
+        if checkpoint_file['optimizer_warp'] is not None:
+            optimizer_warp = load_existing_state_dict(optimizer_warp, checkpoint_file['optimizer_warp'])
+        del checkpoint_file
 
     if args.multi_gpu:
         model = DataParallel(model)
+        model_D = DataParallel(model_D)
+
         # implement model.optim_parameters(args) to handle different models' lr setting
         optimizer = optim.SGD(model.module.parameters_seg_multi(args),
                               lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        if (args.warper or args.spadeWarper):
+            optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
+
     else:
         model.to(device)
-        # implement model.optim_parameters(args) to handle different models' lr setting
-        optimizer = optim.SGD(model.parameters_seg(args),
-                              lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+        model_D.to(device)
+
+
+    # if args.from_scratch:  # training model from pre-trained ResNet on source & target domain
+    #     if args.restore_from_resnet[:4] == 'http':
+    #         saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
+    #     else:
+    #         saved_state_dict = torch.load(args.restore_from_resnet)
+    #
+    #     new_params = model.state_dict().copy()
+    #     for i in saved_state_dict:
+    #         # Scale.layer5.conv2d_list.3.weight
+    #         i_parts = i.split('.')
+    #         if not i_parts[1] == 'layer5':
+    #             new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+    #     model.load_state_dict(new_params)
+    # else:  # training model from pre-trained DeepLab on source & target domain
+    #     saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
+    #     new_params = model.state_dict().copy()
+    #     for i in saved_state_dict:
+    #         if i in new_params.keys():
+    #             new_params[i] = saved_state_dict[i]
+    #     model.load_state_dict(new_params)
+    #
+    # if PRE_TRAINED_DISC is not None:
+    #     saved_state_dict_D = torch.load(PRE_TRAINED_DISC, map_location=device)
+    #     new_params = model_D.state_dict().copy()
+    #     for i in saved_state_dict_D:
+    #         if i in new_params.keys():
+    #             new_params[i] = saved_state_dict_D[i]
+    #     model_D.load_state_dict(new_params)
+
+    if args.target == 'CityScapes':
+        targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
+                                                         max_iters=args.num_steps * args.batch_size,
+                                                         crop_size=input_size_target,
+                                                         scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                                                         set=args.set),
+                                       batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                       pin_memory=True)
+    elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
+        targetloader = data.DataLoader(
+            synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt',
+                           max_iters=args.num_steps * args.batch_size,
+                           crop_size=input_size_target,
+                           scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
+                           set=args.set),
+            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+            pin_memory=True)
+    else:
+        raise NotImplementedError('Unavailable target domain')
+
+    targetloader_iter = enumerate(targetloader)
+
+    if args.gan == 'Vanilla':
+        bce_loss = torch.nn.BCEWithLogitsLoss()
+    elif args.gan == 'LS':
+        bce_loss = torch.nn.MSELoss()
+    elif args.gan == 'Hinge':
+        adversarial_loss = Hinge(model_D)
+
+    # labels for adversarial training
+    source_label = 0
+    target_label = 1
+
+    model.train()
+    model_D.train()
 
     if not args.source_only and args.memory and not args.num_dataset == 1:
         ref_model = copy.deepcopy(model)  # reference model for distillation loss
@@ -195,13 +195,8 @@ def main():
 
     # cudnn.benchmark = True
     optimizer.zero_grad()
-
+    optimizer_D.zero_grad()
     if (args.warper or args.spadeWarper):
-        if args.multi_gpu:
-            optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
-        else:
-            optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
-
         optimizer_warp.zero_grad()
 
     seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
@@ -293,8 +288,12 @@ def main():
 
             D_out = model_D(F.softmax(pred_target, dim=1))
 
-            loss_adv_target = bce_loss(D_out,
-                                       torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+            if args.gan == 'Hinge':
+                loss_adv_target = adversarial_loss(pred_target, generator=True)
+
+            else:
+                loss_adv_target = bce_loss(D_out,
+                                           torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
             loss = args.lambda_adv_target[args.num_dataset - 1] * loss_adv_target
             loss_adv_target_value += loss_adv_target.item()
@@ -309,23 +308,30 @@ def main():
             # train with source
             pred = pred.detach()
 
-            D_out = model_D(F.softmax(pred, dim=1))
-
-            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
-            loss_D = loss_D / 2
-
-            loss_D.backward()
-
-            loss_D_value += loss_D.item()
-
             # train with target
             pred_target = pred_target.detach()
 
-            D_out = model_D(F.softmax(pred_target, dim=1))
+            if args.gan == 'Hinge':
+                loss_D = adversarial_loss(pred_target, pred, generator=False)
 
-            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+            else:
+                D_out = model_D(F.softmax(pred, dim=1))
 
-            loss_D = loss_D / 2
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                loss_D = loss_D / 2
+
+                loss_D.backward()
+
+                loss_D_value += loss_D.item()
+
+
+
+                D_out = model_D(F.softmax(pred_target, dim=1))
+
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+
+                loss_D = loss_D / 2
+
 
             loss_D.backward()
             loss_D_value += loss_D.item()
@@ -365,7 +371,7 @@ def main():
                 i_iter, args.num_steps, loss_seg_value_before_warped, loss_seg_value_after_warped, loss_distillation_value,
                 loss_adv_target_value, loss_D_value))
 
-        state = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp)
+        state = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp, args.snapshot_dir, args.dir_name)
         if state:
             break
 

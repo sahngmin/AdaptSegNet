@@ -5,7 +5,7 @@ from options import TrainOptions, dataset_list
 
 
 # ---------------------------------------------- save model -----------------------------------------------------
-def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimizer_warp):
+def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimizer_warp, snapshot_dir, dir_name):
     # Snapshots directory
     if args.multi_gpu:
         info = {'state_dict_seg': SegModel.module.state_dict()}
@@ -13,18 +13,18 @@ def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimize
         info = {'state_dict_seg': SegModel.state_dict()}
 
     info['optimizer_seg'] = optimizer.state_dict()
-    info['optimizer_warp'] = optimizer_warp.state_dict()
     info['discriminator'] = model_D.state_dict()
-    info['disc_optimizer'] = optimizer_D.state_dict()
+    info['optimizer_disc'] = optimizer_D.state_dict()
 
+    if (args.warper or args.spadeWarper):
+        info['optimizer_warp'] = optimizer_warp.state_dict()
+    else:
+        info['optimizer_warp'] = None
 
-    # dir_name = 'single_alignment_warper'
     # SegNet_name = 'checkpoint'
-
-    dir_name = args.dir_name
     SegNet_name = args.segnet_name
 
-    dir_path = osp.join(args.snapshot_dir, dir_name)
+    dir_path = osp.join(snapshot_dir, dir_name)
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -54,3 +54,11 @@ def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimize
         torch.save(info, model_save_name + '.pth')
 
 
+def load_existing_state_dict(model, saved_state_dict):
+    new_params = model.state_dict().copy()
+    for i in saved_state_dict:
+        if i in new_params.keys():
+            new_params[i] = saved_state_dict[i]
+    model.load_state_dict(new_params)
+
+    return model
