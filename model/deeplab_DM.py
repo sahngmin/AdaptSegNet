@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch
 import numpy as np
 from torch.autograd import Variable
-from model.warper import Warper
+from model.warper import Warper, ConvWarper
 from collections import OrderedDict
 import operator
 from itertools import islice
@@ -246,8 +246,8 @@ class ResNet_DM(nn.Module):
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
         if args.warper:
-            self.WarpModel = Warper(args=args)
-
+            # self.WarpModel = Warper(args=args)
+            self.WarpModel = ConvWarper(num_channel=args.num_classes)
         if args.spadeWarper:
             # parse options
             opt = TrainOptions().parse()
@@ -256,7 +256,7 @@ class ResNet_DM(nn.Module):
                 else torch.FloatTensor
             self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
                 else torch.ByteTensor
-            self.WarpModel = SPADEGenerator(opt)
+            self.WarpModel = SPADEGenerator(opt, use_z=True)
 
         if args.memory:
             for num_dataset in range(len_dataset):
@@ -345,7 +345,7 @@ class ResNet_DM(nn.Module):
                 label = topk.squeeze(1).to(self.device)
 
             edge_map = self.preprocess_input(input, label)
-            warper = self.WarpModel(edge_map)
+            warper = self.WarpModel(edge_map, z=output_ori)
 
             if not self.memory:
                 output_ori_warped = self.warp(output_ori, warper)
@@ -363,20 +363,13 @@ class ResNet_DM(nn.Module):
         any batchnorm parameter
         """
         b = []
-        if self.multi_gpu:
-            b.append(self.module.conv1)
-            b.append(self.module.bn1)
-            b.append(self.module.layer1)
-            b.append(self.module.layer2)
-            b.append(self.module.layer3)
-            b.append(self.module.layer4)
-        else:
-            b.append(self.conv1)
-            b.append(self.bn1)
-            b.append(self.layer1)
-            b.append(self.layer2)
-            b.append(self.layer3)
-            b.append(self.layer4)
+
+        b.append(self.conv1)
+        b.append(self.bn1)
+        b.append(self.layer1)
+        b.append(self.layer2)
+        b.append(self.layer3)
+        b.append(self.layer4)
 
         for i in range(len(b)):
             for j in b[i].modules():
@@ -392,10 +385,8 @@ class ResNet_DM(nn.Module):
         which does the classification of pixel into classes
         """
         b = []
-        if self.multi_gpu:
-            layer6_param = self.module.layer6.parameters()
-        else:
-            layer6_param = self.layer6.parameters()
+
+        layer6_param = self.layer6.parameters()
         b.append(layer6_param)
 
         for j in range(len(b)):
@@ -406,11 +397,8 @@ class ResNet_DM(nn.Module):
         DM_name = 'DM' + str(args.num_dataset)
 
         b = []
-        if self.multi_gpu:
-            dm_param = getattr(self.module, DM_name).parameters()
-        else:
-            dm_param = getattr(self, DM_name).parameters()
 
+        dm_param = getattr(self, DM_name).parameters()
         b.append(dm_param)
 
         for j in range(len(b)):

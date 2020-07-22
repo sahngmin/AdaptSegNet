@@ -112,11 +112,11 @@ def main():
         model_D = DataParallel(model_D)
 
         # implement model.optim_parameters(args) to handle different models' lr setting
-        optimizer = optim.SGD(model.module.parameters_seg(args),
-                              lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-        optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-        if (args.warper or args.spadeWarper):
-            optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
+        # optimizer = optim.SGD(model.module.parameters_seg(args),
+        #                       lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
+        # optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
+        # if (args.warper or args.spadeWarper):
+        #     optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
 
     else:
         model.to(device)
@@ -237,7 +237,6 @@ def main():
             adjust_learning_rate(optimizer_warp, i_iter, args)
 
         # train G
-
         if not args.source_only:
             for param in model_D.parameters():
                 param.requires_grad = False

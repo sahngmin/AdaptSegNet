@@ -22,20 +22,21 @@ class SPADEGenerator(BaseNetwork):
 
         return parser
 
-    def __init__(self, opt):
+    def __init__(self, opt, use_z):
         super().__init__()
         self.opt = opt
+        # opt.ngf = 4
         nf = opt.ngf
 
         self.sw, self.sh = self.compute_latent_vector_size(opt)
+        self.use_z = use_z
 
-        if opt.use_vae:
-            # In case of VAE, we will sample from random z vector
-            self.fc = nn.Linear(opt.z_dim, 4 * nf * self.sw * self.sh)
+        if self.use_z:
+            start_channel = self.opt.semantic_nc * 2
         else:
-            # Otherwise, we make the network deterministic by starting with
-            # downsampled segmentation map instead of random z
-            self.fc = nn.Conv2d(self.opt.semantic_nc, 8 * nf, 3, padding=1)
+            start_channel = self.opt.semantic_nc
+
+        self.fc = nn.Conv2d(start_channel, 8 * nf, 3, padding=1)
 
         self.head_0 = SPADEResnetBlock(8 * nf, 4 * nf, opt)
 
@@ -76,21 +77,17 @@ class SPADEGenerator(BaseNetwork):
         # input: torch.Size([1, 184, 256, 256])
         seg = input
 
-        if self.opt.use_vae:
-            # we sample z from unit normal and reshape the tensor
-            if z is None:
-                z = torch.randn(input.size(0), self.opt.z_dim,
-                                dtype=torch.float32, device=input.get_device())
-            x = self.fc(z)
-            x = x.view(-1, 16 * self.opt.ngf, self.sh, self.sw)
-        else:
-            # we downsample segmap and run convolution
-            # seg: torch.Size([1, 184, 256, 256])
+        # we downsample segmap and run convolution
+        # seg: torch.Size([1, 184, 256, 256])
 
-            # self.sh, self.sw = 8, 8
-            x = F.interpolate(seg, size=(64, 128))
-            x = self.fc(x)
+        # self.sh, self.sw = 8, 8
+        x = F.interpolate(seg, size=(64, 128))
 
+        if self.use_z:
+            z = F.interpolate(z, size=(64, 128))
+            x = torch.cat((z,x), 1)
+
+        x = self.fc(x)
         x = self.head_0(x, seg)
 
         x = self.up(x)

@@ -242,25 +242,6 @@ class Warper(nn.Module):
         self.decoder_d = init_weights(SkipConnectionDecode(norm, 2, driving_num_layers, use_dropout, transpose),
                                        init_type, init_gain)
 
-    @staticmethod
-    def flip_warp(warp_list):
-        warp_list_flip = [0] * len(warp_list)
-        for i, warper in enumerate(warp_list.copy()):
-
-            warper_copy = warper.detach()
-            # ones = torch.randn((1, warper_copy.size(-1), warper_copy.size(-1))).fill_(1)
-            # flipper = torch.cat((-ones, ones), dim=0)
-            #
-            ones = np.ones((1, warper_copy.size(-1), warper_copy.size(-1)))
-            flipper = np.concatenate((-ones, ones), 0)
-            flipper = torch.Tensor(flipper).unsqueeze(0).repeat(warper_copy.size(0), 1, 1, 1)
-
-            if torch.cuda.is_available():
-                flipper = flipper.cuda()
-            flipper = nn.Parameter(flipper, requires_grad=False)
-            flipped_warper = flipper * warper_copy
-            warp_list_flip[i] = flipped_warper
-        return warp_list_flip
 
     def forward(self, image, map=None, warper_flip=False):
         if map is not None:
@@ -270,3 +251,18 @@ class Warper(nn.Module):
 
         return warp_output, warp_list
 
+
+class ConvWarper(nn.Module):
+    def __init__(self, num_channel):
+        super(ConvWarper, self).__init__()
+        self.conv1 = nn.Conv2d(2 * num_channel, 2, kernel_size=1)
+
+    def forward(self, image, map=None, feat=None):
+        if map is not None:
+            image = torch.cat((image, map), 1)
+        if feat is not None:
+            image = torch.cat((image, feat), 1)
+
+        warper = self.conv1(image)
+
+        return warper

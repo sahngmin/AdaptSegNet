@@ -155,7 +155,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
         self.parser.add_argument("--warper", action='store_true', default=WARPER)
         self.parser.add_argument("--feat-warp", default=True)
-        self.parser.add_argument("--multi_gpu", default=False)
+        self.parser.add_argument("--multi_gpu", default=True)
         self.parser.add_argument("--spadeWarper", default=SPADE_WARPER)
 
         self.parser.add_argument("--dir_name", default=SAVE_DIR_NAME)
