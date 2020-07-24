@@ -26,6 +26,8 @@ torch.cuda.manual_seed(0) # gpu 연산 무작위 고정
 torch.cuda.manual_seed_all(0) # 멀티 gpu 연산 무작위 고정
 torch.backends.cudnn.enabled = False # cudnn library를 사용하지 않게 만듬
 np.random.seed(0) # numpy 관련 연산 무작위 고정
+random.seed(0)
+
 
 PRE_TRAINED_SEG = './snapshots/OLD/Scratch_warper/single_level/GTA5_75000.pth'
 # PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
@@ -38,7 +40,6 @@ args = TrainOptions().parse()
 
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
-
 
 def adjust_learning_rate(optimizer, i_iter, args):
     lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
