@@ -3,15 +3,15 @@ import argparse
 SOURCE_ONLY = False
 MEMORY = False
 WARPER = False
-SPADE_WARPER = True
+SPADE_WARPER = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
-NUM_STEPS = 150000
+SAVE_PRED_EVERY = 500
+NUM_STEPS_STOP = 8000 # early stopping
+NUM_STEPS = 15000
 
-dataset_list = ['GTA5', 'CityScapes']
-TARGET = 'CityScapes'
+dataset_list = ['SEQS-04-DAWN', 'SEQS-02-DAWN']
+TARGET = 'Synthia'
 SET = 'train'
 NUM_DATASET = len(dataset_list)
 
@@ -28,30 +28,32 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'Hinge'
 
-LAMBDA_ADV_TARGET = [0.001, 0.002]
+LAMBDA_ADV_TARGET = [0.0005, 0.0005]
 LAMBDA_DISTILLATION = 0.1
 
 RANDOM_SEED = 1338
 
 MODEL = 'DeepLab'
-BATCH_SIZE = 1
+BATCH_SIZE = 8
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
 # DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+DATA_DIRECTORY = './dataset/SYNTHIA-SEQS-04-DAWN'
+
 # DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+DATA_LIST_PATH = './dataset/synthia_seqs_04_dawn_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '512,256'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
+DATA_DIRECTORY_TARGET = './dataset/SYNTHIA-SEQS-02-DAWN'
 # DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
-DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
-INPUT_SIZE_TARGET = '1024,512'
+DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_02_dawn_list/train.txt'
+INPUT_SIZE_TARGET = '512,256'
 
-NUM_CLASSES = 19 + 1
+NUM_CLASSES = 11
 
 # RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
@@ -153,6 +155,8 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--memory", action='store_true', default=MEMORY)
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
         self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
+        self.parser.add_argument("--input_size", default=INPUT_SIZE)
+
         self.parser.add_argument("--warper", action='store_true', default=WARPER)
         self.parser.add_argument("--feat-warp", default=True)
         self.parser.add_argument("--multi_gpu", default=True)

@@ -232,6 +232,8 @@ class ResNet_DM(nn.Module):
         self.device = device
         self.args = args
         self.inplanes = 64
+        w, h = map(int, args.input_size.split(','))
+        self.input_size = (w, h)
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine=affine_par)
         for i in self.bn1.parameters():
@@ -293,7 +295,7 @@ class ResNet_DM(nn.Module):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
 
-    def forward(self, input, input_size, label=None):
+    def forward(self, input, label=None):
         output_both_warped, output_ori_warped, output_both, output_ori = None, None, None, None
 
         x = self.conv1(input)
@@ -306,7 +308,7 @@ class ResNet_DM(nn.Module):
         x1 = self.layer4(x)
 
         x2 = self.layer6(x1[0])
-        output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
+        output_ori = nn.Upsample(size=(self.input_size[1], self.input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
         if self.memory:
             DM_name = 'DM' + str(self.num_dataset)
 
@@ -321,7 +323,7 @@ class ResNet_DM(nn.Module):
             #          (x3_2 - x3_2.view(self.batch_size, -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
             #          x3_2.view(self.batch_size, -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
             new_x += F.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
-            output_both = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
+            output_both = nn.Upsample(size=(self.input_size[1], self.input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
         if self.warper:
             if label is not None:

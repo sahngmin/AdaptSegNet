@@ -8,9 +8,11 @@ import torch
 import torchvision
 from torch.utils import data
 from PIL import Image
+import imageio
+import cv2
 
-class synthiaDataset(data.Dataset):
-    def __init__(self, root, list_path, max_iters=None, crop_size=(321, 321), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='val'):
+class SYNTHIADataSet(data.Dataset):
+    def __init__(self, root, list_path, max_iters=None, crop_size=(321, 321), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='train'):
         self.root = root
         self.list_path = list_path
         self.crop_size = crop_size
@@ -18,17 +20,21 @@ class synthiaDataset(data.Dataset):
         self.ignore_label = ignore_label
         self.mean = mean
         self.is_mirror = mirror
-        # self.mean_bgr = np.array([104.00698793, 116.66876762, 122.67891434])
         self.img_ids = [i_id.strip() for i_id in open(list_path)]
-        if not max_iters==None:
+        if not max_iters == None:
             self.img_ids = self.img_ids * int(np.ceil(float(max_iters) / len(self.img_ids)))
         self.files = []
         self.set = set
-        # for split in ["train", "trainval", "val"]:
+        self.id_to_trainid = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5,
+                              7: 6, 8: 7, 9: 8, 12: 9, 15: 10}
+
+        # for split in ["train", "val"]:
         for name in self.img_ids:
             img_file = osp.join(self.root, self.set, name)
+            label_file = osp.join(self.root, "GT/LABELS/Stereo_Left/Omni_F/%s" % (name))
             self.files.append({
                 "img": img_file,
+                "label": label_file,
                 "name": name
             })
 
@@ -39,29 +45,38 @@ class synthiaDataset(data.Dataset):
         datafiles = self.files[index]
 
         image = Image.open(datafiles["img"]).convert('RGB')
+        label = np.asarray(imageio.imread(datafiles["label"], format='PNG-FI'))[:, :, 0]
         name = datafiles["name"]
 
         # resize
         image = image.resize(self.crop_size, Image.BICUBIC)
+        if self.set == 'train':
+            label = cv2.resize(label, self.crop_size, interpolation=cv2.INTER_NEAREST)
 
         image = np.asarray(image, np.float32)
+        label = np.asarray(label, np.float32)
+
+        label_copy = 255 * np.ones(label.shape, dtype=np.float32)
+        for k, v in self.id_to_trainid.items():
+            label_copy[label == k] = v
 
         size = image.shape
         image = image[:, :, ::-1]  # change to BGR
-        image -= self.mean
+        # image -= self.mean
+        image = image / 255.0
         image = image.transpose((2, 0, 1))
 
-        return image.copy(), np.array(size), name
+        return image.copy(), label_copy, np.array(size), name
 
 
 if __name__ == '__main__':
-    dst = synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt', set='train')
-    trainloader = data.DataLoader(dst, batch_size=4)
+    dst = SYNTHIADataSet("/work/SYNTHIA-SEQS-04-SPRING", "./synthia_seqs_04_spring_list/train.txt", crop_size=(1024, 512),
+                    scale=False, mirror=False, mean=np.array((0, 0, 0), dtype=np.float32))
+    trainloader = data.DataLoader(dst, batch_size=1)
+    all_imgs = 0.0
     for i, data in enumerate(trainloader):
-        imgs, labels, name = data
-        if i == 0:
-            img = torchvision.utils.make_grid(imgs).numpy()
-            img = np.transpose(img, (1, 2, 0))
-            img = img[:, :, ::-1]
-            plt.imshow(img)
-            plt.show()
+        imgs, labels, shape, name = data
+        all_imgs += imgs
+        print(i, len(trainloader))
+    img_mean = all_imgs.squeeze().view(3, -1).mean(dim=1) / len(trainloader)
+    print(img_mean)

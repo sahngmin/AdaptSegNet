@@ -15,7 +15,7 @@ from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
-from dataset.synthia_dataset import synthiaDataset
+from dataset.synthia_dataset import SYNTHIADataSet
 from utils.tsne_plot import TSNE_plot
 from utils.custom_function import save_model, load_existing_state_dict
 from torch.nn import DataParallel
@@ -73,7 +73,7 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')
 
     w, h = map(int, args.input_size.split(','))
@@ -90,7 +90,8 @@ def main():
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     if (args.warper or args.spadeWarper):
         optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
-
+    else:
+        optimizer_warp = None
     # model_D = FCDiscriminator(num_classes=args.num_classes)
     model_D = SpectralDiscriminator(num_classes=args.num_classes)
     optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
@@ -107,6 +108,36 @@ def main():
             optimizer_warp = load_existing_state_dict(optimizer_warp, checkpoint_file['optimizer_warp'])
         del checkpoint_file
 
+
+    if args.from_scratch:  # training model from pre-trained ResNet on source & target domain
+        if args.restore_from_resnet[:4] == 'http':
+            saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
+        else:
+            saved_state_dict = torch.load(args.restore_from_resnet)
+
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            # Scale.layer5.conv2d_list.3.weight
+            i_parts = i.split('.')
+            if not i_parts[1] == 'layer5':
+                new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
+        model.load_state_dict(new_params)
+    else:  # training model from pre-trained DeepLab on source & target domain
+        saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            if i in new_params.keys():
+                new_params[i] = saved_state_dict[i]
+        model.load_state_dict(new_params)
+
+    if PRE_TRAINED_DISC is not None:
+        saved_state_dict_D = torch.load(PRE_TRAINED_DISC, map_location=device)
+        new_params = model_D.state_dict().copy()
+        for i in saved_state_dict_D:
+            if i in new_params.keys():
+                new_params[i] = saved_state_dict_D[i]
+        model_D.load_state_dict(new_params)
+
     if args.multi_gpu:
         model = DataParallel(model)
         model_D = DataParallel(model_D)
@@ -122,36 +153,6 @@ def main():
         model.to(device)
         model_D.to(device)
 
-
-    # if args.from_scratch:  # training model from pre-trained ResNet on source & target domain
-    #     if args.restore_from_resnet[:4] == 'http':
-    #         saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
-    #     else:
-    #         saved_state_dict = torch.load(args.restore_from_resnet)
-    #
-    #     new_params = model.state_dict().copy()
-    #     for i in saved_state_dict:
-    #         # Scale.layer5.conv2d_list.3.weight
-    #         i_parts = i.split('.')
-    #         if not i_parts[1] == 'layer5':
-    #             new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-    #     model.load_state_dict(new_params)
-    # else:  # training model from pre-trained DeepLab on source & target domain
-    #     saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
-    #     new_params = model.state_dict().copy()
-    #     for i in saved_state_dict:
-    #         if i in new_params.keys():
-    #             new_params[i] = saved_state_dict[i]
-    #     model.load_state_dict(new_params)
-    #
-    # if PRE_TRAINED_DISC is not None:
-    #     saved_state_dict_D = torch.load(PRE_TRAINED_DISC, map_location=device)
-    #     new_params = model_D.state_dict().copy()
-    #     for i in saved_state_dict_D:
-    #         if i in new_params.keys():
-    #             new_params[i] = saved_state_dict_D[i]
-    #     model_D.load_state_dict(new_params)
-
     if args.target == 'CityScapes':
         targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
                                                          max_iters=args.num_steps * args.batch_size,
@@ -162,7 +163,7 @@ def main():
                                        pin_memory=True)
     elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
         targetloader = data.DataLoader(
-            synthiaDataset("SYNTHIA-SEQS-01-WINTERNIGHT", 'synthia_01winternight_list/train.txt',
+            SYNTHIADataSet(args.data_dir_target, args.data_list_target,
                            max_iters=args.num_steps * args.batch_size,
                            crop_size=input_size_target,
                            scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
@@ -182,8 +183,8 @@ def main():
         adversarial_loss = Hinge(model_D)
 
     # labels for adversarial training
-    source_label = 0
-    target_label = 1
+    source_label = 1
+    target_label = 0
 
     model.train()
     model_D.train()
@@ -199,18 +200,18 @@ def main():
     if (args.warper or args.spadeWarper):
         optimizer_warp.zero_grad()
 
-    seg_loss = torch.nn.CrossEntropyLoss(ignore_index=19)
+    seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
 
     # set up tensor board
     if args.tensorboard:
         if not os.path.exists(args.log_dir):
             os.makedirs(args.log_dir)
 
-        writer = SummaryWriter(args.log_dir)
+        writer = SummaryWriter(os.path.join(args.log_dir, args.dir_name))
 
         # Dataloader
     trainloader = data.DataLoader(
-        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+        SYNTHIADataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
                     crop_size=input_size,
                     scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
         batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
@@ -248,22 +249,22 @@ def main():
         labels = labels.long().to(device)
 
         if (args.warper or args.spadeWarper) and args.memory:
-            pred_warped, _, pred, pred_ori = model(images, input_size)
+            pred_warped, _, pred, pred_ori = model(images)
         elif args.warper:
-            _, pred_warped, _, pred = model(images, input_size)
+            _, pred_warped, _, pred = model(images)
         elif args.spadeWarper:
-            _, pred_warped, _, pred = model(images, input_size, labels)
+            _, pred_warped, _, pred = model(images, labels)
         elif args.memory:
-            _, _, pred, pred_ori = model(images, input_size)
+            _, _, pred, pred_ori = model(images)
         else:
-            _, _, _, pred = model(images, input_size)
+            _, _, _, pred = model(images)
 
         loss_seg = seg_loss(pred, labels)
         loss = loss_seg
         loss_seg_value_before_warped += loss_seg.item()
 
         if not args.source_only and args.memory and not args.num_dataset == 1:
-            _, _, _, old_outputs = ref_model(images, input_size)
+            _, _, _, old_outputs = ref_model(images)
             loss_distillation = distillation_loss(pred_ori, old_outputs)
             loss += args.lambda_distillation * loss_distillation
             loss_distillation_value += loss_distillation.item()
@@ -271,18 +272,17 @@ def main():
         loss.backward()
 
         _, batch = targetloader_iter.__next__()
-        images_target, _, _ = batch
+        images_target, _, _, _ = batch
         images_target = images_target.to(device)
 
         if args.warper and args.memory:
-            pred_target_warped, _, pred_target, _ = model(images_target, input_size)
+            pred_target_warped, _, pred_target, _ = model(images_target)
         elif (args.warper or args.spadeWarper):
-            _, pred_target_warped, _, pred_target = model(images_target, input_size)
+            _, pred_target_warped, _, pred_target = model(images_target)
         elif args.memory:
-            _, _, pred_target, _ = model(images_target, input_size)
+            _, _, pred_target, _ = model(images_target)
         else:
-            _, _, _, pred_target = model(images_target, input_size)
-
+            _, _, _, pred_target = model(images_target)
 
         D_out = model_D(F.softmax(pred_target, dim=1))
 
@@ -296,67 +296,80 @@ def main():
         loss = args.lambda_adv_target[args.num_dataset - 1] * loss_adv_target
         loss_adv_target_value += loss_adv_target.item()
         loss.backward()
+        optimizer.step()
 
-        # train D
+        if (args.warper or args.spadeWarper):
+            optimizer_warp.step()
 
-        # bring back requires_grad
-        for param in model_D.parameters():
-            param.requires_grad = True
 
-        # train with source
-        pred = pred.detach()
+        for k in range(5):
+            # train D
 
-        # train with target
-        pred_target = pred_target.detach()
+            if (args.warper or args.spadeWarper) and args.memory:
+                pred_warped, _, pred, pred_ori = model(images)
+            elif args.warper:
+                _, pred_warped, _, pred = model(images)
+            elif args.spadeWarper:
+                _, pred_warped, _, pred = model(images, labels)
+            elif args.memory:
+                _, _, pred, pred_ori = model(images)
+            else:
+                _, _, _, pred = model(images)
 
-        if args.gan == 'Hinge':
-            loss_D = adversarial_loss(pred_target, pred, generator=False)
 
-        else:
-            D_out = model_D(F.softmax(pred, dim=1))
+            # bring back requires_grad
+            for param in model_D.parameters():
+                param.requires_grad = True
 
-            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
-            loss_D = loss_D / 2
+            # train with source
+            pred = pred.detach()
+
+            # train with target
+            pred_target = pred_target.detach()
+
+            if args.gan == 'Hinge':
+                loss_D = adversarial_loss(pred_target, pred, generator=False)
+            else:
+                D_out = model_D(F.softmax(pred, dim=1))
+
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                loss_D = loss_D / 2
+                loss_D.backward()
+
+                loss_D_value += loss_D.item()
+
+                D_out = model_D(F.softmax(pred_target, dim=1))
+
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+
+                loss_D = loss_D / 2
+
 
             loss_D.backward()
-
             loss_D_value += loss_D.item()
 
-
-
-            D_out = model_D(F.softmax(pred_target, dim=1))
-
-            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
-
-            loss_D = loss_D / 2
-
-
-        loss_D.backward()
-        loss_D_value += loss_D.item()
-
-        optimizer.step()
-        if not args.source_only:
             optimizer_D.step()
+        loss_D_value = loss_D_value / 5
 
-        if args.warper:  # retain_graph=True -> CUDA out of memory
-            if args.memory:  # feed-forwarding the input again
-                pred_warped, _, pred, _ = model(images, input_size)
-            else:
-                _, pred_warped, _, pred = model(images, input_size)
-
-            loss_seg = seg_loss(pred_warped, labels)
-            loss = loss_seg
-            loss_seg_value_after_warped += loss_seg.item()
-            loss.backward()
-            optimizer_warp.step()
+        # if (args.warper or args.spadeWarper):  # retain_graph=True -> CUDA out of memory
+        #     if args.memory:  # feed-forwarding the input again
+        #         pred_warped, _, pred, _ = model(images)
+        #     else:
+        #         _, pred_warped, _, pred = model(images)
+        #
+        #     loss_seg = seg_loss(pred_warped, labels)
+        #     loss = loss_seg
+        #     loss_seg_value_after_warped += loss_seg.item()
+        #     loss.backward()
+        #     optimizer_warp.step()
 
         if args.tensorboard:
             scalar_info = {
-                'loss_seg_before_warped': loss_seg_value_before_warped,
-                'loss_seg_after_warped': loss_seg_value_after_warped,
-                'loss_distillation': loss_distillation_value,
-                'loss_adv_target': loss_adv_target_value,
-                'loss_D': loss_D_value
+                'Train/loss_seg_before_warped': loss_seg_value_before_warped,
+                'Train/loss_seg_after_warped': loss_seg_value_after_warped,
+                'Train/loss_distillation': loss_distillation_value,
+                'Train/loss_adv_target': loss_adv_target_value,
+                'Train/loss_D': loss_D_value
                 }
 
             if i_iter % 10 == 0:
