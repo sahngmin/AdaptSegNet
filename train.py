@@ -269,12 +269,11 @@ def main():
         else:
             _, _, _, pred_target = model(images_target)
 
-        D_out = model_D(F.softmax(pred_target, dim=1))
-
         if args.gan == 'Hinge':
-            loss_adv_target = adversarial_loss(D_out, generator=True)
+            loss_adv_target = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
 
         else:
+            D_out = model_D(F.softmax(pred_target, dim=1))
             loss_adv_target = bce_loss(D_out,
                                        torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
@@ -311,10 +310,7 @@ def main():
             pred_target = pred_target.detach()
 
             if args.gan == 'Hinge':
-                D_out_source = model_D(F.softmax(pred, dim=1))
-                D_out_target = model_D(F.softmax(pred_target, dim=1))
-
-                loss_D = adversarial_loss(D_out_target, D_out_source, generator=False)
+                loss_D = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=False)
                 loss_D.backward()
                 loss_D_value += loss_D.item()
 
