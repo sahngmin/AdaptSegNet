@@ -14,5 +14,4 @@ dataset/SYNTHIA-SEQS-01-WINTERNIGHT
 dataset/gta5_dataset.py
 log/
 dataset/
-#data/gta5_dataset.py
-#data/gta5_list
+data/
