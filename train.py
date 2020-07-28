@@ -296,8 +296,8 @@ def main():
         if (args.warper or args.spadeWarper):
             optimizer_warp.step()
 
-
-        for k in range(3):
+        iteration_disc = 3
+        for k in range(iteration_disc):
             # train D
 
             if (args.warper or args.spadeWarper) and args.memory:
@@ -344,7 +344,7 @@ def main():
             loss_D_value += loss_D.item()
 
             optimizer_D.step()
-        loss_D_value = loss_D_value / 5
+        loss_D_value = loss_D_value / iteration_disc
 
         # if (args.warper or args.spadeWarper):  # retain_graph=True -> CUDA out of memory
         #     if args.memory:  # feed-forwarding the input again
