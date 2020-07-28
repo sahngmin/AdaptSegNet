@@ -9,7 +9,7 @@ import os
 import os.path as osp
 import random
 from tensorboardX import SummaryWriter
-import copyingeLo
+import copy
 from options import TrainOptions, dataset_list
 from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
