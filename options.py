@@ -47,7 +47,7 @@ IGNORE_LABEL = 255
 INPUT_SIZE = '512,256'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = '.dataset/CityScapes'
+DATA_DIRECTORY_TARGET = './dataset/CityScapes'
 DATA_LIST_PATH_TARGET = './data/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '512,256'
 
