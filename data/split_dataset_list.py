@@ -3,8 +3,8 @@ import random
 from shutil import copyfile
 
 write_new_ori = False
-data_path = "SYNTHIA-SEQS-01-WINTERNIGHT"
-sub_dir = "RGB/Stereo_Left/Omni_F"
+data_path = "../dataset/GTA5"
+sub_dir = "images"
 
 if write_new_ori:
     total_files = sorted([f for dp, dn, fn in os.walk(os.path.expanduser(os.path.join(data_path, sub_dir))) for f in fn])
@@ -19,7 +19,7 @@ img_ids = [i_id for i_id in open(list_path)]
 
 random.shuffle(img_ids)
 
-val_len = int(len(img_ids) / 7)
+val_len = int(len(img_ids) / 7)  # 7
 val_list = img_ids[:val_len]
 train_list = img_ids[val_len:]
 

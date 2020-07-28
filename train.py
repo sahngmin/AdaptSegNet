@@ -13,9 +13,9 @@ import copy
 from options import TrainOptions, dataset_list
 from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
-from dataset.gta5_dataset import GTA5DataSet
-from dataset.cityscapes_dataset import cityscapesDataSet
-from dataset.synthia_dataset import SYNTHIADataSet
+from data.gta5_dataset import GTA5DataSet
+from data.cityscapes_dataset import cityscapesDataSet
+from data.synthia_dataset import SYNTHIADataSet
 from utils.tsne_plot import TSNE_plot
 from utils.custom_function import save_model, load_existing_state_dict
 from torch.nn import DataParallel
@@ -154,23 +154,23 @@ def main():
         model.to(device)
         model_D.to(device)
 
+
+        # Dataloader
+    trainloader = data.DataLoader(
+        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size, crop_size=input_size, set=args.set),
+        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    trainloader_iter = enumerate(trainloader)
+
     if args.target == 'CityScapes':
-        targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                         max_iters=args.num_steps * args.batch_size,
-                                                         crop_size=input_size_target,
-                                                         scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                                                         set=args.set),
+        targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target, max_iters=args.num_steps * args.batch_size,
+                                                         crop_size=input_size_target, set=args.set),
                                        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                        pin_memory=True)
     elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
-        targetloader = data.DataLoader(
-            SYNTHIADataSet(args.data_dir_target, args.data_list_target,
-                           max_iters=args.num_steps * args.batch_size,
-                           crop_size=input_size_target,
-                           scale=False, mirror=args.random_mirror, mean=IMG_MEAN,
-                           set=args.set),
-            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-            pin_memory=True)
+        targetloader = data.DataLoader(SYNTHIADataSet(args.data_dir_target, args.data_list_target,
+                                    max_iters=args.num_steps * args.batch_size, crop_size=input_size_target, set=args.set),
+                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                    pin_memory=True)
     else:
         raise NotImplementedError('Unavailable target domain')
 
@@ -210,13 +210,7 @@ def main():
 
         writer = SummaryWriter(os.path.join(args.log_dir, args.dir_name))
 
-        # Dataloader
-    trainloader = data.DataLoader(
-        SYNTHIADataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
-                    crop_size=input_size,
-                    scale=args.random_scale, mirror=args.random_mirror, mean=IMG_MEAN),
-        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
-    trainloader_iter = enumerate(trainloader)
+
 
     # start training
     for i_iter in range(args.num_steps):
@@ -245,7 +239,7 @@ def main():
 
         _, batch = trainloader_iter.__next__()
 
-        images, labels, _, _ = batch
+        images, labels, _ = batch
         images = images.to(device)
         labels = labels.long().to(device)
 
@@ -273,7 +267,7 @@ def main():
         loss.backward()
 
         _, batch = targetloader_iter.__next__()
-        images_target, _, _, _ = batch
+        images_target, _, _= batch
         images_target = images_target.to(device)
 
         if args.warper and args.memory:

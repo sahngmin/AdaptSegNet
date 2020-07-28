@@ -12,26 +12,22 @@ import imageio
 import cv2
 
 class SYNTHIADataSet(data.Dataset):
-    def __init__(self, root, list_path, max_iters=None, crop_size=(321, 321), mean=(128, 128, 128), scale=True, mirror=True, ignore_label=255, set='train'):
+    def __init__(self, root, list_path, max_iters=None, crop_size=(512, 256), ignore_label=255, set='train'):
         self.root = root
         self.list_path = list_path
         self.crop_size = crop_size
-        self.scale = scale
         self.ignore_label = ignore_label
-        self.mean = mean
-        self.is_mirror = mirror
         self.img_ids = [i_id.strip() for i_id in open(list_path)]
         if not max_iters == None:
             self.img_ids = self.img_ids * int(np.ceil(float(max_iters) / len(self.img_ids)))
         self.files = []
         self.set = set
-        self.id_to_trainid = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5,
-                              7: 6, 8: 7, 9: 8, 12: 9, 15: 10}
+        self.id_to_trainid = {3: 0, 4: 1, 2: 2, 15: 3, 9: 4, 6: 5, 1: 6,
+                              10: 7, 17: 8, 8: 9, 19: 10, 12: 11, 11: 12}
 
-        # for split in ["train", "val"]:
         for name in self.img_ids:
             img_file = osp.join(self.root, self.set, name)
-            label_file = osp.join(self.root, "GT/LABELS/Stereo_Left/Omni_F/%s" % (name))
+            label_file = osp.join(self.root, "GT/LABELS/%s" % name)
             self.files.append({
                 "img": img_file,
                 "label": label_file,
@@ -50,32 +46,28 @@ class SYNTHIADataSet(data.Dataset):
 
         # resize
         image = image.resize(self.crop_size, Image.BICUBIC)
-        if self.set == 'train':
-            label = cv2.resize(label, self.crop_size, interpolation=cv2.INTER_NEAREST)
+        label = cv2.resize(label, self.crop_size, interpolation=cv2.INTER_NEAREST)
 
         image = np.asarray(image, np.float32)
         label = np.asarray(label, np.float32)
 
-        label_copy = 255 * np.ones(label.shape, dtype=np.float32)
+        label_copy = self.ignore_label * np.ones(label.shape, dtype=np.float32)
         for k, v in self.id_to_trainid.items():
             label_copy[label == k] = v
 
-        size = image.shape
         image = image[:, :, ::-1]  # change to BGR
-        # image -= self.mean
         image = image / 255.0
         image = image.transpose((2, 0, 1))
 
-        return image.copy(), label_copy, np.array(size), name
+        return image, label_copy, name
 
 
 if __name__ == '__main__':
-    dst = SYNTHIADataSet("/work/SYNTHIA-SEQS-04-SPRING", "./synthia_seqs_04_spring_list/train.txt", crop_size=(1024, 512),
-                    scale=False, mirror=False, mean=np.array((0, 0, 0), dtype=np.float32))
+    dst = SYNTHIADataSet("/work/SYNTHIA", "./synthia_list/val.txt", crop_size=(512, 256), ignore_label=255, set='val')
     trainloader = data.DataLoader(dst, batch_size=1)
     all_imgs = 0.0
     for i, data in enumerate(trainloader):
-        imgs, labels, shape, name = data
+        imgs, labels, name = data
         all_imgs += imgs
         print(i, len(trainloader))
     img_mean = all_imgs.squeeze().view(3, -1).mean(dim=1) / len(trainloader)
