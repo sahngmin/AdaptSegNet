@@ -6,9 +6,9 @@ WARPER = False
 SPADE_WARPER = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 500
-NUM_STEPS_STOP = 8000 # early stopping
-NUM_STEPS = 10000
+SAVE_PRED_EVERY = 1000
+NUM_STEPS_STOP = 30000 # early stopping
+NUM_STEPS = 40000
 
 dataset_list = ['GTA5', 'CityScapes']
 TARGET = dataset_list[-1]
@@ -28,7 +28,7 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'Hinge'
 
-LAMBDA_ADV_TARGET = [0.001, 0.001]
+LAMBDA_ADV_TARGET = [0.0005, 0.0005]
 LAMBDA_DISTILLATION = 0.1
 
 RANDOM_SEED = 1338
@@ -53,8 +53,8 @@ INPUT_SIZE_TARGET = '512,256'
 
 NUM_CLASSES = 13
 
-# RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
+RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+# RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
 SAVE_NUM_IMAGES = 2
 
@@ -157,7 +157,7 @@ class TrainOptions(BaseOptions):
 
         self.parser.add_argument("--warper", action='store_true', default=WARPER)
         self.parser.add_argument("--feat-warp", default=True)
-        self.parser.add_argument("--multi_gpu", default=True)
+        self.parser.add_argument("--multi_gpu", default=False)
         self.parser.add_argument("--spadeWarper", default=SPADE_WARPER)
 
         self.parser.add_argument("--dir_name", default=SAVE_DIR_NAME)

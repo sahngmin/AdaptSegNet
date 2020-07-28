@@ -94,6 +94,6 @@ class SpectralDiscriminator(nn.Module):
 		x = self.leaky_relu(x)
 		x = self.classifier(x)
 		# x = self.up_sample(x)
-		x = self.sigmoid(x)
+	       	# x = self.sigmoid(x)
 
 		return x
