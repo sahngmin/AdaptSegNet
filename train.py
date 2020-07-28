@@ -9,7 +9,7 @@ import os
 import os.path as osp
 import random
 from tensorboardX import SummaryWriter
-import copy
+import copyingeLo
 from options import TrainOptions, dataset_list
 from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
@@ -272,7 +272,7 @@ def main():
         D_out = model_D(F.softmax(pred_target, dim=1))
 
         if args.gan == 'Hinge':
-            loss_adv_target = adversarial_loss(pred_target, generator=True)
+            loss_adv_target = adversarial_loss(D_out, generator=True)
 
         else:
             loss_adv_target = bce_loss(D_out,
@@ -311,21 +311,21 @@ def main():
             pred_target = pred_target.detach()
 
             if args.gan == 'Hinge':
-                loss_D = adversarial_loss(pred_target, pred, generator=False)
+                D_out_source = model_D(F.softmax(pred, dim=1))
+                D_out_target = model_D(F.softmax(pred_target, dim=1))
+
+                loss_D = adversarial_loss(D_out_target, D_out_source, generator=False)
+
+
             else:
                 D_out = model_D(F.softmax(pred, dim=1))
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                 loss_D = loss_D / 2
-                loss_D.backward()
-
-                loss_D_value += loss_D.item()
 
                 D_out = model_D(F.softmax(pred_target, dim=1))
-
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
-
-                loss_D = loss_D / 2
+                loss_D_2 = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+                loss_D += loss_D_2 / 2
 
             loss_D.backward()
             loss_D_value += loss_D.item()

@@ -345,9 +345,7 @@ class ResNet_DM(nn.Module):
                 output_ori_warped = self.warp(output_ori, warper)
             else:
                 output_both_warped = self.warp(output_both, warper)
-
         return output_both_warped, output_ori_warped, output_both, output_ori
-
 
     def ResNet_params(self):
         """
