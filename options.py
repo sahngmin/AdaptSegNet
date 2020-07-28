@@ -3,7 +3,7 @@ import argparse
 SOURCE_ONLY = False
 MEMORY = False
 WARPER = False
-SPADE_WARPER = False
+SPADE_WARPER = True
 FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 500
@@ -34,7 +34,7 @@ LAMBDA_DISTILLATION = 0.1
 RANDOM_SEED = 1338
 
 MODEL = 'DeepLab'
-BATCH_SIZE = 8
+BATCH_SIZE = 2
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'

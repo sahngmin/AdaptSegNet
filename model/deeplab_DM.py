@@ -15,7 +15,6 @@ import pdb
 
 affine_par = True
 
-
 def outS(i):
     i = int(i)
     i = (i + 1) / 2
@@ -254,11 +253,10 @@ class ResNet_DM(nn.Module):
         if args.spadeWarper:
             # parse options
             opt = TrainOptions().parse()
-            self.opt = opt
-            self.FloatTensor = torch.cuda.FloatTensor if self.use_gpu() \
-                else torch.FloatTensor
-            self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
-                else torch.ByteTensor
+            self.opt = args
+            self.FloatTensor = torch.FloatTensor
+            # self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
+            #     else torch.ByteTensor
             self.WarpModel = SPADEGenerator(args, use_z=True)
 
         if args.memory:
@@ -348,6 +346,7 @@ class ResNet_DM(nn.Module):
                 label = topk.squeeze(1).to(self.device)
 
             edge_map = self.preprocess_input(label)
+
             warper = self.WarpModel(edge_map, z=output_ori)
 
             if not self.memory:
@@ -448,11 +447,11 @@ class ResNet_DM(nn.Module):
         label_map = map.unsqueeze(1)
 
         # create one-hot label map
-        # torch.Size([1, 184, 256, 256])
+        # torch.Size([1, semantic_nc, 256, 256])
         bs, _, h, w = label_map.size()
         nc = self.opt.semantic_nc
-        input_label = self.FloatTensor(bs, nc, h, w).zero_()
-        label_map[label_map == 255] = 10
+        input_label = self.FloatTensor(bs, nc, h, w).zero_().to(self.device)
+        label_map[label_map == 255] = 12
         # pdb.set_trace()
         input_semantics = input_label.scatter_(1, label_map, 1.0)
         # instance_label = False
@@ -471,8 +470,8 @@ class ResNet_DM(nn.Module):
     #     edge[:, :, :-1, :] = edge[:, :, :-1, :] | (t[:, :, 1:, :] != t[:, :, :-1, :])
     #     return edge.float()
 
-    def use_gpu(self):
-        return len(self.opt.gpu_ids) > 0
+    # def use_gpu(self):
+    #     return len(self.opt.gpu_ids) > 0
 
 def Deeplab_DM(args=None, device='cpu'):
     model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset, device=device)
