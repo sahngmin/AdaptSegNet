@@ -74,7 +74,7 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')
 
     w, h = map(int, args.input_size.split(','))
@@ -143,13 +143,6 @@ def main():
         model = DataParallel(model)
         model_D = DataParallel(model_D)
 
-        # implement model.optim_parameters(args) to handle different models' lr setting
-        # optimizer = optim.SGD(model.module.parameters_seg(args),
-        #                       lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-        # optimizer_D = optim.Adam(model_D.module.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-        # if (args.warper or args.spadeWarper):
-        #     optimizer_warp = optim.Adam(model.module.parameters_warp(args), lr=args.learning_rate)
-
     else:
         model.to(device)
         model_D.to(device)
@@ -207,10 +200,7 @@ def main():
     if args.tensorboard:
         if not os.path.exists(args.log_dir):
             os.makedirs(args.log_dir)
-
         writer = SummaryWriter(os.path.join(args.log_dir, args.dir_name))
-
-
 
     # start training
     for i_iter in range(args.num_steps):
@@ -296,8 +286,7 @@ def main():
         if (args.warper or args.spadeWarper):
             optimizer_warp.step()
 
-        iteration_disc = 3
-        for k in range(iteration_disc):
+        for k in range(args.iteration_disc):
             # train D
 
             if (args.warper or args.spadeWarper) and args.memory:
@@ -310,7 +299,6 @@ def main():
                 _, _, pred, pred_ori = model(images)
             else:
                 _, _, _, pred = model(images)
-
 
             # bring back requires_grad
             for param in model_D.parameters():
@@ -339,12 +327,11 @@ def main():
 
                 loss_D = loss_D / 2
 
-
             loss_D.backward()
             loss_D_value += loss_D.item()
 
             optimizer_D.step()
-        loss_D_value = loss_D_value / iteration_disc
+        loss_D_value = loss_D_value / args.iteration_disc
 
         # if (args.warper or args.spadeWarper):  # retain_graph=True -> CUDA out of memory
         #     if args.memory:  # feed-forwarding the input again
@@ -358,31 +345,42 @@ def main():
         #     loss.backward()
         #     optimizer_warp.step()
 
-        if args.tensorboard:
-            scalar_info = {
-                'Train/loss_seg_before_warped': loss_seg_value_before_warped,
-                'Train/loss_seg_after_warped': loss_seg_value_after_warped,
-                'Train/loss_distillation': loss_distillation_value,
-                'Train/loss_adv_target': loss_adv_target_value,
-                'Train/loss_D': loss_D_value
-                }
 
-            if i_iter % 10 == 0:
+        if i_iter % 10 == 0:
+            if args.tensorboard:
+                scalar_info = {
+                    'Train/loss_seg_before_warped': loss_seg_value_before_warped,
+                    'Train/loss_seg_after_warped': loss_seg_value_after_warped,
+                    'Train/loss_distillation': loss_distillation_value,
+                    'Train/loss_adv_target': loss_adv_target_value,
+                    'Train/loss_D': loss_D_value
+                }
                 for key, val in scalar_info.items():
                     writer.add_scalar(key, val, i_iter)
 
-        print('exp = {}'.format(args.snapshot_dir))
         print(
             'iter = {0:8d}/{1:8d}, loss_seg_before_warped = {2:.3f} loss_seg_after_warped = {3:.3f} loss_distill = {4:.3f} loss_adv = {5:.3f} loss_D = {6:.3f}'.format(
                 i_iter, args.num_steps, loss_seg_value_before_warped, loss_seg_value_after_warped, loss_distillation_value,
                 loss_adv_target_value, loss_D_value))
 
-        state = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp, args.snapshot_dir, args.dir_name)
-        if state:
+        if i_iter % args.save_pred_every == 0 and i_iter != 0:
+            print('taking snapshot ...')
+            model_save_name, info = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp,
+                                               args.snapshot_dir, args.dir_name)
+            model_save_name += '_' + str(i_iter)
+            torch.save(info, model_save_name + '.pth')
+
+        if i_iter >= args.num_steps_stop - 1:
+            print('save model ...')
+            model_save_name, info = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp,
+                                               args.snapshot_dir, args.dir_name)
+            model_save_name += '_' + str(args.num_steps_stop)
+            torch.save(info, model_save_name + '.pth')
             break
 
     if args.tensorboard:
         writer.close()
+
 
 if __name__ == '__main__':
     main()

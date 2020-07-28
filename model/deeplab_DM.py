@@ -157,7 +157,6 @@ class Bottleneck(nn.Module):
         out += residual
         nonlinear_out = F.relu(out, inplace=True)
 
-
         return [nonlinear_out, out]
 
 
@@ -251,15 +250,7 @@ class ResNet_DM(nn.Module):
         if args.warper:
             # self.WarpModel = Warper(args=args)
             self.WarpModel = ConvWarper(num_channel=args.num_classes)
-        if args.spadeWarper:
-            # parse options
-            opt = TrainOptions().parse()
-            self.opt = opt
-            self.FloatTensor = torch.cuda.FloatTensor if self.use_gpu() \
-                else torch.FloatTensor
-            self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
-                else torch.ByteTensor
-            self.WarpModel = SPADEGenerator(args, use_z=True)
+
 
         if args.memory:
             for num_dataset in range(len_dataset):

@@ -30,6 +30,7 @@ GAN = 'Hinge'
 
 LAMBDA_ADV_TARGET = [0.001, 0.001]
 LAMBDA_DISTILLATION = 0.1
+UPDATE_DISC = 2
 
 RANDOM_SEED = 1338
 
@@ -154,6 +155,8 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
         self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
         self.parser.add_argument("--input_size", default=INPUT_SIZE)
+        self.parser.add_argument("--update_disc", default=UPDATE_DISC)
+
 
         self.parser.add_argument("--warper", action='store_true', default=WARPER)
         self.parser.add_argument("--feat-warp", default=True)

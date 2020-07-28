@@ -38,20 +38,7 @@ def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimize
 
     model_save_name = osp.join(dir_path, SegNet_name)
 
-
-    if i_iter >= args.num_steps_stop - 1:
-        print('save model ...')
-        model_save_name += '_' + str(args.num_steps_stop)
-
-        torch.save(info, model_save_name + '.pth')
-
-        return True
-
-    if i_iter % args.save_pred_every == 0 and i_iter != 0:
-        print('taking snapshot ...')
-        model_save_name += '_' + str(i_iter)
-
-        torch.save(info, model_save_name + '.pth')
+    return model_save_name, info
 
 
 def load_existing_state_dict(model, saved_state_dict):
