@@ -15,3 +15,5 @@ dataset/gta5_dataset.py
 log/
 dataset/
 data/
+checkpoints/
+
