@@ -34,23 +34,23 @@ LAMBDA_DISTILLATION = 0.1
 RANDOM_SEED = 1338
 
 MODEL = 'DeepLab'
-BATCH_SIZE = 1
+BATCH_SIZE = 2
 ITER_SIZE = 1
 NUM_WORKERS = 4
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
 # DATA_DIRECTORY = '/work/GTA5'
-# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
+# DATA_DIRECTORY = '.dataset/GTA5'
 DATA_DIRECTORY = './dataset/SYNTHIA-SEQS-04-DAWN'
 
 # DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
-DATA_LIST_PATH = './dataset/synthia_seqs_04_dawn_list/train.txt'
+DATA_LIST_PATH = './data/synthia_seqs_04_dawn_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '512,256'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
 DATA_DIRECTORY_TARGET = './dataset/SYNTHIA-SEQS-02-DAWN'
-# DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
-DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_02_dawn_list/train.txt'
+# DATA_DIRECTORY_TARGET = '.dataset/CityScapes'
+DATA_LIST_PATH_TARGET = './data/synthia_seqs_02_dawn_list/train.txt'
 INPUT_SIZE_TARGET = '512,256'
 
 NUM_CLASSES = 11
@@ -165,5 +165,14 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--dir_name", default=SAVE_DIR_NAME)
         self.parser.add_argument("--segnet_name", default=SEGNET_NAME)
         self.parser.add_argument("--warper_name", default=WARPER_NAME)
+
+        # SPADE options
+        self.parser.add_argument('--norm_G', type=str, default='spectralspadesyncbatch3x3',
+                            help='instance normalization or batch normalization')
+        self.parser.add_argument('--semantic_nc', type=int, default=NUM_CLASSES, help='# of input label classes without unknown class. If you have unknown class as class label, specify --contain_dopntcare_label.')
+        self.parser.add_argument('--ngf', type=int, default=4, help='# of gen filters in first conv layer')
+        self.parser.add_argument('--num_upsampling_layers',
+                            choices=('normal', 'more', 'most'), default='normal',
+                            help="If 'more', adds upsampling layer between the two middle resnet blocks. If 'most', also add one more upsampling + resnet layer at the end of the generator")
 
 

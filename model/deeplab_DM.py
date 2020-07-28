@@ -11,9 +11,10 @@ import operator
 from itertools import islice
 from .SPADE_pix2pix.models.networks.generator import SPADEGenerator
 from .SPADE_pix2pix.options.train_options import TrainOptions
-
+import pdb
 
 affine_par = True
+
 
 def outS(i):
     i = int(i)
@@ -258,7 +259,7 @@ class ResNet_DM(nn.Module):
                 else torch.FloatTensor
             self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
                 else torch.ByteTensor
-            self.WarpModel = SPADEGenerator(opt, use_z=True)
+            self.WarpModel = SPADEGenerator(args, use_z=True)
 
         if args.memory:
             for num_dataset in range(len_dataset):
@@ -346,7 +347,7 @@ class ResNet_DM(nn.Module):
                 _, topk = torch.topk(confidence, 1, dim=1)
                 label = topk.squeeze(1).to(self.device)
 
-            edge_map = self.preprocess_input(input, label)
+            edge_map = self.preprocess_input(label)
             warper = self.WarpModel(edge_map, z=output_ori)
 
             if not self.memory:
@@ -442,7 +443,7 @@ class ResNet_DM(nn.Module):
 
         return sampled
 
-    def preprocess_input(self, image, map):
+    def preprocess_input(self, map):
         # move to GPU and change data types
         label_map = map.unsqueeze(1)
 
@@ -451,9 +452,9 @@ class ResNet_DM(nn.Module):
         bs, _, h, w = label_map.size()
         nc = self.opt.semantic_nc
         input_label = self.FloatTensor(bs, nc, h, w).zero_()
-        label_map[label_map == 255] = 19
+        label_map[label_map == 255] = 10
+        # pdb.set_trace()
         input_semantics = input_label.scatter_(1, label_map, 1.0)
-
         # instance_label = False
         # if instance_label:
         #     inst_map = image

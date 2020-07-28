@@ -10,7 +10,7 @@ from models.networks.base_network import BaseNetwork
 from models.networks.normalization import get_nonspade_norm_layer
 from models.networks.architecture import ResnetBlock as ResnetBlock
 from models.networks.architecture import SPADEResnetBlock as SPADEResnetBlock
-
+import pdb
 
 class SPADEGenerator(BaseNetwork):
     @staticmethod
@@ -28,13 +28,9 @@ class SPADEGenerator(BaseNetwork):
         # opt.ngf = 4
         nf = opt.ngf
 
-        self.sw, self.sh = self.compute_latent_vector_size(opt)
         self.use_z = use_z
 
-        if self.use_z:
-            start_channel = self.opt.semantic_nc * 2
-        else:
-            start_channel = self.opt.semantic_nc
+        start_channel = self.opt.semantic_nc
 
         self.fc = nn.Conv2d(start_channel, 8 * nf, 3, padding=1)
 
@@ -45,6 +41,8 @@ class SPADEGenerator(BaseNetwork):
 
         self.up_0 = SPADEResnetBlock(4 * nf, 4 * nf, opt)
         self.up_1 = SPADEResnetBlock(4 * nf, 4 * nf, opt)
+        # self.up_2 = SPADEResnetBlock(4 * nf, 2 * nf, opt)
+        # self.up_3 = SPADEResnetBlock(2 * nf, 1 * nf, opt)
 
         final_nc = 4 * nf
 
@@ -76,16 +74,14 @@ class SPADEGenerator(BaseNetwork):
     def forward(self, input, z=None):
         # input: torch.Size([1, 184, 256, 256])
         seg = input
-
         # we downsample segmap and run convolution
         # seg: torch.Size([1, 184, 256, 256])
 
         # self.sh, self.sw = 8, 8
-        x = F.interpolate(seg, size=(64, 128))
-
         if self.use_z:
-            z = F.interpolate(z, size=(64, 128))
-            x = torch.cat((z,x), 1)
+            x = F.interpolate(z, size=(32, 64))
+        else:
+            x = F.interpolate(input, size=(32, 64))
 
         x = self.fc(x)
         x = self.head_0(x, seg)
@@ -93,15 +89,28 @@ class SPADEGenerator(BaseNetwork):
         x = self.up(x)
         x = self.G_middle_0(x, seg)
 
-        # x = self.G_middle_1(x, seg)
+        # default: self.opt.num_upsampling_layers = 'normal'
+        if self.opt.num_upsampling_layers == 'more' or \
+                self.opt.num_upsampling_layers == 'most':
+            x = self.up(x)
+
+        x = self.G_middle_1(x, seg)
 
         x = self.up(x)
         x = self.up_0(x, seg)
+        # pdb.set_trace()
+        x = self.up(x)
+        x = self.up_1(x, seg)
         # x = self.up(x)
-        # x = self.up_1(x, seg)
+        # x = self.up_2(x, seg)
+        # x = self.up(x)
+        # x = self.up_3(x, seg)
+
+        if self.opt.num_upsampling_layers == 'most':
+            x = self.up(x)
+            x = self.up_4(x, seg)
 
         x = self.conv_img(F.leaky_relu(x, 2e-1))
-
         x = F.tanh(x)
 
         return x
