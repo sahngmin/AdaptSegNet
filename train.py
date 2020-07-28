@@ -297,7 +297,7 @@ def main():
             optimizer_warp.step()
 
 
-        for k in range(5):
+        for k in range(3):
             # train D
 
             if (args.warper or args.spadeWarper) and args.memory:

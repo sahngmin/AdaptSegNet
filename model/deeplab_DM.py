@@ -9,8 +9,8 @@ from model.warper import Warper, ConvWarper
 from collections import OrderedDict
 import operator
 from itertools import islice
-from .SPADE_pix2pix.models.networks.generator import SPADEGenerator
-from .SPADE_pix2pix.options.train_options import TrainOptions
+# from .SPADE_pix2pix.models.networks.generator import SPADEGenerator
+# from .SPADE_pix2pix.options.train_options import TrainOptions
 import pdb
 
 affine_par = True
