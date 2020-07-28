@@ -163,7 +163,7 @@ class ResNet(nn.Module):
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-    def forward(self, x, input_size, warper):
+    def forward(self, x, input_size):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -172,7 +172,6 @@ class ResNet(nn.Module):
         x = self.layer2(x)
 
         x = self.layer3(x)
-        # x1 = self.layer5(x)
 
         x2 = self.layer4(x)
         x2 = self.layer6(x2)
@@ -211,20 +210,19 @@ class ResNet(nn.Module):
         which does the classification of pixel into classes
         """
         b = []
-        # b.append(self.layer5.parameters())
         b.append(self.layer6.parameters())
 
         for j in range(len(b)):
             for i in b[j]:
                 yield i
 
-    def optim_parameters(self, args, source_only):
-        if source_only:
+    def optim_parameters(self, args):
+        if args.from_scratch:
             result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
                       {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
         else:
             result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
-                      {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
+                      {'params': self.get_10x_lr_params(), 'lr': args.learning_rate}]
         return result
 
 

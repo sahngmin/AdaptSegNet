@@ -1,13 +1,15 @@
 *.pyc
-*.pth
 *.png
 *.jpg
 
 
 .idea/
 data/
-result/
+results/
 snapshots/
 python2_code/
 .DS_Store
-snapshots/
+
+ACE/pretrained_snapshot/
+ACE/snapshots/
+ACE/memory/

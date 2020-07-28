@@ -1,22 +1,15 @@
 import argparse
 
 SOURCE_ONLY = False
-MEMORY = True
-WARPER = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
-NUM_STEPS = 300000
+SAVE_PRED_EVERY = 3000
+NUM_STEPS_STOP = 20000  # early stopping
+NUM_STEPS = 20000
 
-# dataset_dict = {'GTA5': 0, 'CityScapes': 1, 'Synthia': 2}
-# SOURCE = 'GTA5'
-# TARGET = 'CityScapes'
-dataset_dict = {'SEQS-04-SPRING': 0, 'SEQS-02-SPRING': 1, 'SEQS-01-SPRING': 2}
-SOURCE = 'SEQS-04-SPRING'
-TARGET = 'SEQS-02-SPRING'
+SOURCE = 'GTA5'
+TARGET = 'CityScapes'  # 'SYNTHIA' or 'CityScapes'
 SET = 'train'
-NUM_DATASET = dataset_dict[TARGET]
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -27,55 +20,31 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'LS'
 
-LAMBDA_ADV_TARGET = [0.005, 0.002]
-LAMBDA_DISTILLATION = 0.1
+LAMBDA_ADV = 0.001
 
 RANDOM_SEED = 1338
 
-MODEL = 'DeepLab'
-BATCH_SIZE = 1
+IGNORE_LABEL = 255
+
+BATCH_SIZE = 8
 ITER_SIZE = 1
 NUM_WORKERS = 4
 
-# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
-# DATA_DIRECTORY = '/work/GTA5'
-# DATA_DIRECTORY = '/home/smyoo/CAG_UDA/dataset/GTA5'
-# DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
+DATA_DIRECTORY = '/work/GTA5'
+DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+INPUT_SIZE = '512,256'
 
-# DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+# DATA_DIRECTORY_TARGET = '/work/SYNTHIA'
+# DATA_LIST_PATH_TARGET = './dataset/synthia_list/train.txt'
+DATA_DIRECTORY_TARGET = '/work/CityScapes'
+DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+INPUT_SIZE_TARGET = '512,256'
 
-DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-04-SPRING'
-# DATA_DIRECTORY = '/work/SYNTHIA-SEQS-04-SPRING'
-
-DATA_LIST_PATH = './dataset/synthia_seqs_04_spring_list/train.txt'
-
-IGNORE_LABEL = 255
-INPUT_SIZE = '1024,512'
-
-# DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-# DATA_DIRECTORY_TARGET = '/work/CityScapes'
-# DATA_DIRECTORY_TARGET = '/home/smyoo/CAG_UDA/dataset/CityScapes'
-# DATA_DIRECTORY_TARGET = '/home/aiwc/Datasets/CityScapes'
-
-# DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
-
-DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/SYNTHIA-SEQS-02-SPRING'
-# DATA_DIRECTORY_TARGET = '/work/SYNTHIA-SEQS-02-SPRING'
-
-DATA_LIST_PATH_TARGET = './dataset/synthia_seqs_02_spring_list/train.txt'
-
-INPUT_SIZE_TARGET = '1024,512'
-
-# NUM_CLASSES = 19
-NUM_CLASSES = 11
+NUM_CLASSES = 13
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-# RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
-
-SAVE_NUM_IMAGES = 2
 
 SNAPSHOT_DIR = './snapshots/'
-LOG_DIR = './log'
 
 
 class BaseOptions:
@@ -96,8 +65,6 @@ class TrainOptions(BaseOptions):
         super(TrainOptions, self).__init__()
         # Training options
 
-        self.parser.add_argument("--model", type=str, default=MODEL,
-                            help="available options : DeepLab")
         self.parser.add_argument("--source", type=str, default=SOURCE)
         self.parser.add_argument("--target", type=str, default=TARGET)
         self.parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
@@ -126,12 +93,9 @@ class TrainOptions(BaseOptions):
                             help="Base learning rate for training with polynomial decay.")
         self.parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
                             help="Base learning rate for discriminator.")
-        self.parser.add_argument("--lambda-adv-target", type=list, default=LAMBDA_ADV_TARGET,
+        self.parser.add_argument("--lambda-adv", type=float, default=LAMBDA_ADV,
                             help="lambda_adv for adversarial training.")
-        self.parser.add_argument("--lambda-distillation", type=float, default=LAMBDA_DISTILLATION)
         self.parser.add_argument("--momentum", type=float, default=MOMENTUM,
-                            help="Momentum component of the optimiser.")
-        self.parser.add_argument("--not-restore-last", action="store_true",
                             help="Whether to not restore last (FC) layers.")
         self.parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
                             help="Number of classes to predict (including background).")
@@ -141,16 +105,10 @@ class TrainOptions(BaseOptions):
                             help="Number of training steps for early stopping.")
         self.parser.add_argument("--power", type=float, default=POWER,
                             help="Decay parameter to compute the learning rate.")
-        self.parser.add_argument("--random-mirror", action="store_true",
-                            help="Whether to randomly mirror the inputs during the training.")
-        self.parser.add_argument("--random-scale", action="store_true",
-                            help="Whether to randomly scale the inputs during the training.")
         self.parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                             help="Random seed to have reproducible results.")
         self.parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
                             help="Where restore model parameters from.")
-        self.parser.add_argument("--save-num-images", type=int, default=SAVE_NUM_IMAGES,
-                            help="How many images to save.")
         self.parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
                             help="Save summaries and checkpoint every often.")
         self.parser.add_argument("--snapshot-dir", type=str, default=SNAPSHOT_DIR,
@@ -158,18 +116,9 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
                             help="Regularisation parameter for L2-loss.")
         self.parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
-        self.parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.",
-                                 default=False)
-        self.parser.add_argument("--log-dir", type=str, default=LOG_DIR,
-                            help="Path to the directory of log.")
         self.parser.add_argument("--set", type=str, default=SET,
                             help="choose adaptation set.")
         self.parser.add_argument("--gan", type=str, default=GAN,
                             help="choose the GAN objective.")
         self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
-        self.parser.add_argument("--memory", action='store_true', default=MEMORY)
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
-        self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
-        self.parser.add_argument("--warper", action='store_true', default=WARPER)
-        self.parser.add_argument("--feat-warp", default=True)
-
