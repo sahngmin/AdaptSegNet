@@ -315,20 +315,21 @@ def main():
                 D_out_target = model_D(F.softmax(pred_target, dim=1))
 
                 loss_D = adversarial_loss(D_out_target, D_out_source, generator=False)
-
+                loss_D.backward()
+                loss_D_value += loss_D.item()
 
             else:
                 D_out = model_D(F.softmax(pred, dim=1))
-
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                 loss_D = loss_D / 2
+                loss_D.backward()
+                loss_D_value += loss_D.item()
 
                 D_out = model_D(F.softmax(pred_target, dim=1))
-                loss_D_2 = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
-                loss_D += loss_D_2 / 2
-
-            loss_D.backward()
-            loss_D_value += loss_D.item()
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+                loss_D = loss_D / 2
+                loss_D.backward()
+                loss_D_value += loss_D.item()
 
             optimizer_D.step()
         loss_D_value = loss_D_value / args.iteration_disc
