@@ -10,12 +10,12 @@ SAVE_PRED_EVERY = 1000
 NUM_STEPS_STOP = 30000 # early stopping
 NUM_STEPS = 40000
 
-dataset_list = ['GTA5', 'CityScapes']
+dataset_list = ['GTA5', 'Synthia']
 TARGET = dataset_list[-1]
 SET = 'train'
 NUM_DATASET = len(dataset_list)
 
-SAVE_DIR_NAME = 'single_alignment_hinge'
+SAVE_DIR_NAME = 'single_alignment_hinge_synthia'
 SEGNET_NAME = 'checkpoint'
 WARPER_NAME = 'SPADE'
 
@@ -48,8 +48,8 @@ IGNORE_LABEL = 255
 INPUT_SIZE = '512,256'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = './dataset/CityScapes'
-DATA_LIST_PATH_TARGET = './data/cityscapes_list/train.txt'
+DATA_DIRECTORY_TARGET = './dataset/SYNTHIA'
+DATA_LIST_PATH_TARGET = './data/synthia_list/train.txt'
 INPUT_SIZE_TARGET = '512,256'
 
 NUM_CLASSES = 13
