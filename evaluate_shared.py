@@ -29,10 +29,10 @@ NUM_DATASET = 1
 DATA_DIRECTORY = './dataset/GTA5'
 DATA_LIST_PATH = './data/gta5_list/val.txt'
 
-DATA_DIRECTORY_TARGET1 = '/dataset/SYNTHIA'
+DATA_DIRECTORY_TARGET1 = './dataset/SYNTHIA'
 DATA_LIST_PATH_TARGET1 = './data/synthia_list/val.txt'
 
-DATA_DIRECTORY_TARGET2 = '/dataset/CityScapes'
+DATA_DIRECTORY_TARGET2 = './dataset/CityScapes'
 DATA_LIST_PATH_TARGET2 = './data/cityscapes_list/val.txt'
 
 IGNORE_LABEL = 255
@@ -119,7 +119,7 @@ def main():
                                "rider",
                                "car",
                                "bus",
-                               "motocycle",
+                               "motorcycle",
                                "bicycle"])
 
     model = Deeplab_DM(args=args)
