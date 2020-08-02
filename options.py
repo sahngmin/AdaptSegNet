@@ -10,12 +10,12 @@ SAVE_PRED_EVERY = 1000
 NUM_STEPS_STOP = 30000 # early stopping
 NUM_STEPS = 40000
 
-dataset_list = ['GTA5', 'Synthia']
+dataset_list = ['GTA5', 'CityScapes']
 TARGET = dataset_list[-1]
 SET = 'train'
 NUM_DATASET = len(dataset_list)
 
-SAVE_DIR_NAME = 'single_alignment_hinge_synthia'
+SAVE_DIR_NAME = 'single_alignment_hinge_cityscape002'
 SEGNET_NAME = 'checkpoint'
 WARPER_NAME = 'SPADE'
 
@@ -28,7 +28,7 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'Hinge'
 
-LAMBDA_ADV_TARGET = [0.001, 0.001]
+LAMBDA_ADV_TARGET = [0.002, 0.002]
 LAMBDA_DISTILLATION = 0.1
 UPDATE_DISC = 2
 
@@ -37,7 +37,7 @@ RANDOM_SEED = 1338
 MODEL = 'DeepLab'
 BATCH_SIZE = 8
 ITER_SIZE = 1
-NUM_WORKERS = 4
+NUM_WORKERS = 0
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
 # DATA_DIRECTORY = '/work/GTA5'
 DATA_DIRECTORY = './dataset/GTA5'
@@ -48,14 +48,14 @@ IGNORE_LABEL = 255
 INPUT_SIZE = '512,256'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = './dataset/SYNTHIA'
-DATA_LIST_PATH_TARGET = './data/synthia_list/train.txt'
+DATA_DIRECTORY_TARGET = './dataset/CityScapes'
+DATA_LIST_PATH_TARGET = './data/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '512,256'
 
 NUM_CLASSES = 13
 
-# RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
+RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
+# RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
 SAVE_NUM_IMAGES = 2
 

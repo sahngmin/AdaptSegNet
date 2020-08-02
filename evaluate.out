@@ -1,0 +1,35 @@
+nohup: ignoring input
+checkpointGTA5_CityScapes_9000.pth
+==>road:	94.91
+==>sidewalk:	81.75
+==>building:	87.22
+==>light:	27.37
+==>sign:	28.51
+==>vegetation:	76.09
+==>sky:	92.46
+==>person:	57.27
+==>rider:	42.09
+==>car:	84.0
+==>bus:	85.07
+==>motocycle:	49.82
+==>bicycle:	23.68
+===> mIoU (Source): 63.87
+==================================================
+Traceback (most recent call last):
+  File "evaluate_shared.py", line 243, in <module>
+    main()
+  File "evaluate_shared.py", line 180, in main
+    for i, data in enumerate(target1_loader):
+  File "/root/anaconda3/envs/CUDA/lib/python3.7/site-packages/torch/utils/data/dataloader.py", line 363, in __next__
+    data = self._next_data()
+  File "/root/anaconda3/envs/CUDA/lib/python3.7/site-packages/torch/utils/data/dataloader.py", line 403, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/root/anaconda3/envs/CUDA/lib/python3.7/site-packages/torch/utils/data/_utils/fetch.py", line 44, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/root/anaconda3/envs/CUDA/lib/python3.7/site-packages/torch/utils/data/_utils/fetch.py", line 44, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "/root/AdaptSegNet/data/synthia_dataset.py", line 43, in __getitem__
+    image = Image.open(datafiles["img"]).convert('RGB')
+  File "/root/anaconda3/envs/CUDA/lib/python3.7/site-packages/PIL/Image.py", line 2878, in open
+    fp = builtins.open(filename, "rb")
+FileNotFoundError: [Errno 2] No such file or directory: '/dataset/SYNTHIA/val/0009223.png'

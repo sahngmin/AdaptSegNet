@@ -29,15 +29,15 @@ NUM_DATASET = 1
 DATA_DIRECTORY = './dataset/GTA5'
 DATA_LIST_PATH = './data/gta5_list/val.txt'
 
-DATA_DIRECTORY_TARGET1 = '/dataset/SYNTHIA'
+DATA_DIRECTORY_TARGET1 = './dataset/SYNTHIA'
 DATA_LIST_PATH_TARGET1 = './data/synthia_list/val.txt'
 
-DATA_DIRECTORY_TARGET2 = '/dataset/CityScapes'
+DATA_DIRECTORY_TARGET2 = './dataset/CityScapes'
 DATA_LIST_PATH_TARGET2 = './data/cityscapes_list/val.txt'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 13
-BATCH_SIZE = 1
+BATCH_SIZE = 6
 INPUT_SIZE = '512,256'
 SET = 'val'
 
@@ -124,9 +124,9 @@ def main():
 
     model = Deeplab_DM(args=args)
 
-    for model_name in os.listdir(checkpoint_path):
+    for model_name in sorted(os.listdir(checkpoint_path))[::-1]:
         checkpoint = torch.load(os.path.join(checkpoint_path, model_name))
-
+        print(model_name)
         model.load_state_dict(checkpoint['state_dict_seg'])
 
         device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')

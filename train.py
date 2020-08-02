@@ -19,7 +19,10 @@ from data.synthia_dataset import SYNTHIADataSet
 from utils.tsne_plot import TSNE_plot
 from utils.custom_function import save_model, load_existing_state_dict
 from torch.nn import DataParallel
+import torch.backends.cudnn as cudnn
 
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 torch.manual_seed(0) # cpu 연산 무작위 고정
 torch.cuda.manual_seed(0) # gpu 연산 무작위 고정
@@ -29,7 +32,7 @@ np.random.seed(0) # numpy 관련 연산 무작위 고정
 random.seed(0)
 
 
-PRE_TRAINED_SEG = './snapshots/OLD/Scratch_warper/single_level/GTA5_75000.pth'
+# PRE_TRAINED_SEG = './snapshots/OLD/Scratch_warper/single_level/GTA5_75000.pth'
 # PRE_TRAINED_DISC = './snapshots/GTA2Cityscape/GTA5toCityScapes_single_level_best_model_D.pth'
 PRE_TRAINED_DISC = None
 
@@ -203,6 +206,7 @@ def main():
         writer = SummaryWriter(os.path.join(args.log_dir, args.dir_name))
 
     # start training
+    print("start training")    
     for i_iter in range(args.num_steps):
 
         loss_seg_value_before_warped = 0
@@ -255,11 +259,12 @@ def main():
             loss_distillation_value += loss_distillation.item()
 
         loss.backward()
-
+                
         _, batch = targetloader_iter.__next__()
+      
         images_target, _, _= batch
         images_target = images_target.to(device)
-
+       
         if args.warper and args.memory:
             pred_target_warped, _, pred_target, _ = model(images_target)
         elif (args.warper or args.spadeWarper):
@@ -268,7 +273,7 @@ def main():
             _, _, pred_target, _ = model(images_target)
         else:
             _, _, _, pred_target = model(images_target)
-
+        
         if args.gan == 'Hinge':
             loss_adv_target = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
 
@@ -281,7 +286,7 @@ def main():
         loss_adv_target_value += loss_adv_target.item()
         loss.backward()
         optimizer.step()
-
+        
         if (args.warper or args.spadeWarper):
             optimizer_warp.step()
 
