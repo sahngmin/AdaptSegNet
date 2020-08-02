@@ -119,7 +119,7 @@ def main():
                                "rider",
                                "car",
                                "bus",
-                               "motocycle",
+                               "motorcycle",
                                "bicycle"])
 
     model = Deeplab_DM(args=args)
