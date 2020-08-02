@@ -5,16 +5,14 @@ import random
 import torch
 import torch.nn as nn
 from torch.utils import data
-from model.deeplab import Deeplab
+from model.deeplab_DM import Deeplab_DM
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.synthia_dataset import SYNTHIADataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
-from dataset.idd_dataset import IDDDataSet
 
 SOURCE = True  # GTA5
 TARGET1 = True  # SYNTHIA
 TARGET2 = True  # CityScapes
-TARGET3 = False  # IDD
 PER_CLASS = True
 
 SAVE_PRED_EVERY = 3000
@@ -25,12 +23,11 @@ DATA_LIST_PATH = './dataset/gta5_list/val.txt'
 
 DATA_DIRECTORY_TARGET1 = '/work/SYNTHIA'
 DATA_LIST_PATH_TARGET1 = './dataset/synthia_list/val.txt'
+# NUM_TARGET = 2
 
 DATA_DIRECTORY_TARGET2 = '/work/CityScapes'
 DATA_LIST_PATH_TARGET2 = './dataset/cityscapes_list/val.txt'
-
-DATA_DIRECTORY_TARGET3 = '/work/IDD_Segmentation'
-DATA_LIST_PATH_TARGET3 = './dataset/idd_list/val.txt'
+NUM_TARGET = 1
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 13
@@ -58,7 +55,7 @@ def get_arguments():
     parser.add_argument("--source", action='store_true', default=SOURCE)
     parser.add_argument("--target1", action='store_true', default=TARGET1)
     parser.add_argument("--target2", action='store_true', default=TARGET2)
-    parser.add_argument("--target3", action='store_true', default=TARGET3)
+    parser.add_argument("--num-target", type=int, default=NUM_TARGET)
     parser.add_argument("--mIoUs-per-class", action='store_true', default=PER_CLASS)
     parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
                         help="Path to the directory containing the source dataset.")
@@ -119,12 +116,16 @@ def main():
                                "bicycle"])
 
     # Create the model and start the evaluation process
-    model = Deeplab(args=args)
+    model = Deeplab_DM(args=args)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
         saved_state_dict = torch.load('./snapshots/' + str((files + 1) * args.save_pred_every) + '.pth')
         # saved_state_dict = torch.load('./snapshots/' + '20000.pth')
-        model.load_state_dict(saved_state_dict)
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            if i in new_params.keys():
+                new_params[i] = saved_state_dict[i]
+        model.load_state_dict(new_params)
 
         device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
@@ -141,7 +142,7 @@ def main():
             for i, data in enumerate(source_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred = model(images_val, input_size)
+                pred, _ = model(images_val, input_size)
                 pred = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)(pred)
                 labels = labels.unsqueeze(1)
                 labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
@@ -169,7 +170,7 @@ def main():
             for i, data in enumerate(target1_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred = model(images_val, input_size)
+                pred, _ = model(images_val, input_size)
                 pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
                 labels = labels.unsqueeze(1)
                 labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
@@ -197,38 +198,10 @@ def main():
             for i, data in enumerate(target2_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred = model(images_val, input_size)
+                pred, _ = model(images_val, input_size)
                 pred = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(pred)
                 labels = labels.unsqueeze(1)
                 labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
-                _, pred = pred.max(dim=1)
-
-                labels = labels.cpu().numpy()
-                pred = pred.cpu().detach().numpy()
-
-                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            mIoUs = per_class_iu(hist)
-            if args.mIoUs_per_class:
-                for ind_class in range(args.num_classes):
-                    print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
-            print('===> mIoU (Target2): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
-            print('=' * 50)
-
-        if args.target3:
-            target2_loader = torch.utils.data.DataLoader(
-                IDDDataSet(args.data_dir_target2, args.data_list_target2,
-                            crop_size=input_size,
-                            ignore_label=args.ignore_label, set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, pin_memory=True)
-
-            hist = np.zeros((args.num_classes, args.num_classes))
-            for i, data in enumerate(target2_loader):
-                images_val, labels, _ = data
-                images_val, labels = images_val.to(device), labels.to(device)
-                pred = model(images_val, input_size)
-                pred = nn.Upsample(size=(1080, 1920), mode='bilinear', align_corners=True)(pred)
-                labels = labels.unsqueeze(1)
-                labels = nn.Upsample(size=(1080, 1920), mode='nearest')(labels)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()

@@ -18,7 +18,7 @@ DATA_LIST_PATH_TARGET = '/home/joonhkim/UDA/AdaptSegNet/dataset/synthia_list/val
 
 TARGET2 = False
 DATA_DIRECTORY_TARGET2 = '/home/joonhkim/UDA/datasets/CityScapes'
-DATA_LIST_PATH_TARGET2 = 'home/joonhkim/UDA/AdaptSegNet/dataset/cityscapes_list/val.txt'
+DATA_LIST_PATH_TARGET2 = '/home/joonhkim/UDA/AdaptSegNet/dataset/cityscapes_list/val.txt'
 
 FILENAME = './snapshots/GTA5toSYNTHIA_50000.pth'
 # FILENAME = './snapshots/GTA5toSYNTHIAtoCityScapes_50000.pth'
@@ -47,7 +47,7 @@ def get_arguments():
     parser.add_argument("--num-classes", type=int, default=13)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--set", type=str, default='val')
-
+    parser.add_argument("--ignore-label", type=int, default=255)
     parser.add_argument("--random-seed", type=int, default=1338)
 
     return parser.parse_args()
@@ -59,6 +59,8 @@ def main():
     seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
+    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 

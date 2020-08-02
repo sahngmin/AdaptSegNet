@@ -9,7 +9,7 @@ import torchvision
 from torch.utils import data
 from PIL import Image
 
-class cityscapesDataSet(data.Dataset):
+class IDDDataSet(data.Dataset):
     def __init__(self, root, list_path, max_iters=None, crop_size=(512, 256), ignore_label=255, set='train', num_classes=13):
         self.root = root
         self.list_path = list_path
@@ -22,18 +22,18 @@ class cityscapesDataSet(data.Dataset):
         self.files = []
         self.set = set
         if self.num_classes == 13:
-            self.id_to_trainid = {7: 0, 8: 1, 11: 2, 19: 3, 20: 4, 21: 5, 23: 6,
-                                  24: 7, 25: 8, 26: 9, 28: 10, 32: 11, 33: 12}
+            self.id_to_trainid = {0: 0, 3: 1, 29: 2, 25: 3, 24: 4, 32: 5, 33: 6,
+                                  6: 7, 8: 8, 12: 9, 14: 10, 9: 11, 10: 12}
         elif self.num_classes == 18:
-            self.id_to_trainid = {7: 0, 8: 1, 11: 2, 12: 3, 13: 4, 17: 5, 19: 6,
-                                  20: 7, 21: 8, 23: 9, 24: 10, 25: 11, 26: 12,
-                                  27: 13, 28: 14, 31: 15, 32: 16, 33: 17}
+            self.id_to_trainid = {0: 0, 3: 1, 29: 2, 20: 3, 21: 4, 26: 5, 25: 6,
+                                  24: 7, 32: 8, 33: 9, 6: 10, 8: 11, 12: 12,
+                                  13: 13, 14: 14, 17: 15, 9: 16, 10: 17}
         else:
             raise NotImplementedError("Unavailable number of classes")
 
         for name in self.img_ids:
             img_file = osp.join(self.root, "leftImg8bit/%s/%s" % (self.set, name))
-            label_file = osp.join(self.root, "gtFine/%s/%s_gtFine_labelIds.png" % (self.set, name[:-16]))
+            label_file = osp.join(self.root, "gtFine/%s/%s_gtFine_labelids.png" % (self.set, name[:-16]))
             self.files.append({
                 "img": img_file,
                 "label": label_file,
@@ -69,8 +69,8 @@ class cityscapesDataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = cityscapesDataSet('/work/CityScapes', './cityscapes_list/val.txt',
-                            crop_size=(512, 256), ignore_label=255, set='val', num_classes=18)
+    dst = IDDDataSet('/work/IDD_Segmentation', './idd_list/train.txt',
+                     crop_size=(512, 256), ignore_label=255, set='train', num_classes=18)
     trainloader = data.DataLoader(dst, batch_size=1)
     for i, data in enumerate(trainloader):
         imgs, labels, name = data

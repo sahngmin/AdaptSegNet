@@ -5,7 +5,6 @@ import torch
 import numpy as np
 import torch.nn.functional as functional
 from torch.autograd import Variable
-from model.warper import Warper
 from collections import OrderedDict
 import operator
 from itertools import islice
@@ -175,23 +174,6 @@ class Classifier_Module(nn.Module):
             out += self.conv2d_list[i + 1](x)
         return out
 
-# class DM(nn.Module):
-#     def __init__(self, inplanes, dilation_series, padding_series, num_classes):
-#         super(DM, self).__init__()
-#         self.conv2d_list = nn.ModuleList()
-#         for dilation, padding in zip(dilation_series, padding_series):
-#             self.conv2d_list.append(
-#                 nn.Conv2d(inplanes, num_classes, kernel_size=3, stride=1, padding=padding, dilation=dilation, bias=True))
-#
-#         for m in self.conv2d_list:
-#             m.weight.data.normal_(0, 0.01)
-#
-#     def forward(self, x):
-#         out = self.conv2d_list[0](x)
-#         for i in range(len(self.conv2d_list) - 1):
-#             out += self.conv2d_list[i + 1](x)
-#         return out
-
 class DM(nn.Module):
     def __init__(self, inplanes, num_classes):
         super(DM, self).__init__()
@@ -199,9 +181,8 @@ class DM(nn.Module):
         self.module_list.append(conv1x1(inplanes, num_classes))
         self.module_list.append(nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
                                               nn.Conv2d(inplanes, num_classes, 1, bias=False),
-                                              nn.ReLU()))   # Nonlinear
-        # self.module_list.append(nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
-        #                                       nn.Conv2d(inplanes, num_classes, 1, bias=False)))  # Linear
+                                              nn.BatchNorm2d(num_classes),
+                                              nn.ReLU()))
 
         for i, m in enumerate(self.module_list):
             if i == 0:
@@ -217,16 +198,12 @@ class DM(nn.Module):
     def forward(self, x):
         out1 = self.module_list[0](x)
         out2 = self.module_list[1](x)
-        # out2 = functional.interpolate(self.module_list[1](x), size=out1.size()[2:], mode='bilinear', align_corners=True)
         return out1, out2
 
 class ResNet_DM(nn.Module):
-    def __init__(self, block, layers, num_classes, args=None, len_dataset=None):
+    def __init__(self, block, layers, num_classes, args=None):
         super(ResNet_DM, self).__init__()
-        self.memory = args.memory
-        self.warper = args.warper
-
-        self.num_dataset = args.num_dataset
+        self.num_target = args.num_target
         self.num_classes = num_classes
         self.batch_size = args.batch_size
 
@@ -245,15 +222,9 @@ class ResNet_DM(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
-        if args.warper:
-            self.WarpModel = Warper(args=args)
-
-        if args.memory:
-            for num_dataset in range(len_dataset):
-                DM_name = 'DM' + str(num_dataset + 1)
-                # setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
-                # setattr(self, DM_name, DM(3072, num_classes))  # with skip connection
-                setattr(self, DM_name, DM(2048, num_classes))  # without skip connection
+        for num in range(self.num_target):
+            DM_name = 'DM' + str(num + 1)
+            setattr(self, DM_name, DM(2048, num_classes))  # without skip connection
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -285,7 +256,6 @@ class ResNet_DM(nn.Module):
 
 
     def forward(self, image, input_size, map=None):
-        output_both_warped, output_ori_warped, output_both, output_ori = None, None, None, None
 
         x = self.conv1(image)
         x = self.bn1(x)
@@ -300,38 +270,20 @@ class ResNet_DM(nn.Module):
         x2 = self.layer6(x1[0])
         output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
-        if self.memory:
-            DM_name = 'DM' + str(self.num_dataset)
+        DM_name = 'DM' + str(self.num_target)
 
-            # x3 = torch.cat((x[1], x1[1]), 1)  # with skip connection, concatenate nonlinear(0)/linear(1) outputs
-            x3 = x1[0]  # without skip connection, nonlinear(0)/linear(1) output
+        x3 = x1[0]  # nonlinear(0)/linear(1) output
 
-            x3_1, x3_2 = getattr(self, DM_name)(x3)
-            new_x = x2 + x2.view(self.batch_size, self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
-                    ((x3_1 - x3_1.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
-                     x3_1.view(self.batch_size, self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3))
-            new_x += x2.view(self.batch_size, self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
-                     (x3_2 - x3_2.view(self.batch_size, -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
-                     x3_2.view(self.batch_size, -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
-            # new_x += functional.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
-            output_both = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
+        x3_1, x3_2 = getattr(self, DM_name)(x3)
+        new_x = x2 + x2.view(x2.shape[0], self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
+                ((x3_1 - x3_1.view(x2.shape[0], self.num_classes, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
+                 x3_1.view(x2.shape[0], self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3))
+        new_x += x2.view(x2.shape[0], self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
+                 (x3_2 - x3_2.view(x2.shape[0], -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
+                 x3_2.view(x2.shape[0], -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
+        output = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
-        if self.warper:
-            if map is not None:
-                warper, warp_list = self.WarpModel(image, map)
-            else:
-                # x2_softmax = nn.Softmax()(x2_up)
-                # x2_filtered = self.threshold(x2_softmax)
-                # warper, warp_list = self.WarpModel(image, x2_filtered)
-
-                if not self.memory:
-                    warper, warp_list = self.WarpModel(output_ori, None)
-                    output_ori_warped = self.warp(output_ori, warper)
-                else:
-                    warper, warp_list = self.WarpModel(output_both, None)
-                    output_both_warped = self.warp(output_both, warper)
-
-        return output_both_warped, output_ori_warped, output_both, output_ori
+        return output, output_ori
 
 
     def ResNet_params(self):
@@ -371,7 +323,7 @@ class ResNet_DM(nn.Module):
                 yield i
 
     def DM_params(self, args):
-        DM_name = 'DM' + str(args.num_dataset)
+        DM_name = 'DM' + str(args.num_target)
 
         b = []
         b.append(getattr(self, DM_name).parameters())
@@ -380,46 +332,20 @@ class ResNet_DM(nn.Module):
             for i in b[j]:
                 yield i
 
-    def parameters_seg(self, args):
-        if args.num_dataset == 1 or args.source_only:
+    def optim_parameters(self, args):
+        if args.from_scratch:
             optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate}]
-
+                                {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
+                                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
         else:
             optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                {'params': self.ASPP_params(), 'lr': args.learning_rate}]
-
-        if self.memory:
-            optim_parameters += [{'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
-
+                                {'params': self.ASPP_params(), 'lr': args.learning_rate},
+                                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
         return optim_parameters
-
-    def parameters_warp(self, args):
-        optim_parameters = [{'params': self.WarpModel.parameters(), 'lr': 10 * args.learning_rate}]
-        return optim_parameters
-
-    @staticmethod
-    def warp(input, warper):
-
-        xs1 = np.linspace(-1, 1, input.size(2))
-        xs2 = np.linspace(-1, 1, input.size(3))
-        xs = np.meshgrid(xs2, xs1)
-        xs = np.stack(xs, 2)
-        xs = torch.Tensor(xs).unsqueeze(0).repeat(input.size(0), 1, 1, 1)
-        if torch.cuda.is_available():
-            xs = xs.cuda()
-
-        sampled = torch.zeros(input.size()).cuda()
-        for i in range(warper.size(1) // 2):
-            sampler = 0.2 * nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
-            sampler = sampler.clamp(min=-1, max=1)
-        sampled = functional.grid_sample(input, sampler)
-
-        return sampled
 
 
 def Deeplab_DM(args=None):
-    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset)
+    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args)
     return model
 
 

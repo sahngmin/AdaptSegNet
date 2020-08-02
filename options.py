@@ -4,8 +4,8 @@ SOURCE_ONLY = False
 FROM_SCRATCH = True
 
 SAVE_PRED_EVERY = 3000
-NUM_STEPS_STOP = 20000  # early stopping
-NUM_STEPS = 20000
+NUM_STEPS_STOP = 30000  # early stopping
+NUM_STEPS = 40000
 
 SOURCE = 'GTA5'
 TARGET = 'CityScapes'  # 'SYNTHIA' or 'CityScapes'
@@ -21,23 +21,25 @@ LEARNING_RATE_D = 1e-4
 GAN = 'LS'
 
 LAMBDA_ADV = 0.001
+LAMBDA_DISTILL = 0.1
 
 RANDOM_SEED = 1338
 
 IGNORE_LABEL = 255
 
 BATCH_SIZE = 8
-ITER_SIZE = 1
 NUM_WORKERS = 4
 
 DATA_DIRECTORY = '/work/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 INPUT_SIZE = '512,256'
 
-# DATA_DIRECTORY_TARGET = '/work/SYNTHIA'
-# DATA_LIST_PATH_TARGET = './dataset/synthia_list/train.txt'
 DATA_DIRECTORY_TARGET = '/work/CityScapes'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+NUM_TARGET = 1
+# DATA_DIRECTORY_TARGET = '/work/SYNTHIA'
+# DATA_LIST_PATH_TARGET = './dataset/synthia_list/train.txt'
+# NUM_TARGET = 2
 INPUT_SIZE_TARGET = '512,256'
 
 NUM_CLASSES = 13
@@ -67,10 +69,9 @@ class TrainOptions(BaseOptions):
 
         self.parser.add_argument("--source", type=str, default=SOURCE)
         self.parser.add_argument("--target", type=str, default=TARGET)
+        self.parser.add_argument("--num-target", type=int, default=NUM_TARGET)
         self.parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                             help="Number of images sent to the network in one step.")
-        self.parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
-                            help="Accumulate gradients for ITER_SIZE iterations.")
         self.parser.add_argument("--num-workers", type=int, default=NUM_WORKERS,
                             help="number of workers for multithread dataloading.")
         self.parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
@@ -95,6 +96,8 @@ class TrainOptions(BaseOptions):
                             help="Base learning rate for discriminator.")
         self.parser.add_argument("--lambda-adv", type=float, default=LAMBDA_ADV,
                             help="lambda_adv for adversarial training.")
+        self.parser.add_argument("--lambda-distill", type=float, default=LAMBDA_DISTILL,
+                                 help="lambda_distill for knowledge distillation.")
         self.parser.add_argument("--momentum", type=float, default=MOMENTUM,
                             help="Whether to not restore last (FC) layers.")
         self.parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,

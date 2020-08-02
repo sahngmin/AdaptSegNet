@@ -23,7 +23,7 @@ MONITOR = True
 # NUM_STEPS_STOP = 150000
 
 BATCH_SIZE = 3
-NUM_STEPS = 70000
+NUM_STEPS = 75000
 NUM_STEPS_STOP = 50000
 
 LR_GEN = 1e-3
@@ -40,7 +40,7 @@ NUM_DATASET = 1
 
 # TARGET = 'CityScapes'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-# DATA_LIST_PATH_TARGET = 'home/joonhkim/UDA/AdaptSegNet/dataset/cityscapes_list/train.txt'
+# DATA_LIST_PATH_TARGET = '/home/joonhkim/UDA/AdaptSegNet/dataset/cityscapes_list/train.txt'
 # NUM_DATASET = 2
 
 RESTORE_FROM_DEEPLAB = './pretrained_snapshot/15000.pth'
@@ -95,6 +95,8 @@ def main():
     seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
+    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 

@@ -7,16 +7,16 @@ import torch.nn.functional as F
 import os
 import os.path as osp
 import random
+import copy
 from options import TrainOptions
-from model.deeplab import Deeplab
+from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.synthia_dataset import SYNTHIADataSet
-from dataset.idd_dataset import IDDDataSet
 
 PRE_TRAINED_SEG = ''
-# PRE_TRAINED_SEG = './snapshots/GTA5_CityScapes/30000.pth'
+# PRE_TRAINED_SEG = './snapshots/GTA5_CityScapes_DM/30000.pth'
 
 args = TrainOptions().parse()
 
@@ -31,12 +31,20 @@ def adjust_learning_rate(optimizer, i_iter, args):
             for i in range(1, len(optimizer.param_groups)):
                 optimizer.param_groups[i]['lr'] = lr * 10
         else:
+            optimizer.param_groups[1]['lr'] = lr
             for i in range(1, len(optimizer.param_groups)):
-                optimizer.param_groups[i]['lr'] = lr
+                optimizer.param_groups[i]['lr'] = lr * 10
 
 def adjust_learning_rate_D(optimizer, i_iter):
     lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
     optimizer.param_groups[0]['lr'] = lr
+
+def distillation_loss(pred_origin, old_outputs):
+    pred_origin_logsoftmax = (pred_origin / 2).log_softmax(dim=1)
+    old_outputs = (old_outputs / 2).softmax(dim=1)
+    loss_distillation = (-(old_outputs * pred_origin_logsoftmax)).sum(dim=1)
+    loss_distillation = loss_distillation.sum() / loss_distillation.flatten().shape[0]
+    return loss_distillation
 
 def main():
     seed = args.random_seed
@@ -57,7 +65,7 @@ def main():
     cudnn.enabled = True
 
     # Create network
-    model = Deeplab(args=args)
+    model = Deeplab_DM(args=args)
     if args.source_only:  # training model from pre-trained ResNet on source domain
         saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
         new_params = model.state_dict().copy()
@@ -79,7 +87,11 @@ def main():
             model.load_state_dict(new_params)
         else:  # training model from pre-trained DeepLab on source & target domain
             saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
-            model.load_state_dict(saved_state_dict)
+            new_params = model.state_dict().copy()
+            for i in saved_state_dict:
+                if i in new_params.keys():
+                    new_params[i] = saved_state_dict[i]
+            model.load_state_dict(new_params)
 
     model.train()
     model.to(device)
@@ -92,6 +104,13 @@ def main():
 
         model_D.train()
         model_D.to(device)
+
+    # reference model
+    if not args.from_scratch:
+        ref_model = copy.deepcopy(model)  # reference model for knowledge distillation
+        for params in ref_model.parameters():
+            params.requires_grad = False
+        ref_model.eval()
 
     # Dataloader
     trainloader = data.DataLoader(
@@ -111,14 +130,6 @@ def main():
                                            pin_memory=True)
         elif args.target == 'SYNTHIA':
             targetloader = data.DataLoader(SYNTHIADataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             ignore_label=args.ignore_label,
-                                                             set=args.set, num_classes=args.num_classes),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
-        elif args.target == 'IDD':
-            targetloader = data.DataLoader(IDDDataSet(args.data_dir_target, args.data_list_target,
                                                              max_iters=args.num_steps * args.batch_size,
                                                              crop_size=input_size_target,
                                                              ignore_label=args.ignore_label,
@@ -154,6 +165,7 @@ def main():
 
         loss_seg_value = 0
         loss_adv_value = 0
+        loss_distill_value = 0
         loss_D_value = 0
 
         optimizer.zero_grad()
@@ -174,11 +186,17 @@ def main():
         images = images.to(device)
         labels = labels.long().to(device)
 
-        pred = model(images, input_size)
+        pred, pred_ori = model(images, input_size)
 
         loss_seg = seg_loss(pred, labels)
         loss = loss_seg
         loss_seg_value += loss_seg.item()
+
+        if not args.from_scratch:
+            _, old_outputs = ref_model(images)
+            loss_distill = distillation_loss(pred_ori, old_outputs)
+            loss += args.lambda_distill * loss_distill
+            loss_distill_value += loss_distill.item()
 
         loss.backward()
 
@@ -187,7 +205,7 @@ def main():
             images_target, _, _ = batch
             images_target = images_target.to(device)
 
-            pred_target = model(images_target, input_size_target)
+            pred_target, _ = model(images_target, input_size_target)
 
             D_out = model_D(F.softmax(pred_target, dim=1))
 
@@ -233,8 +251,8 @@ def main():
 
         print('exp = {}'.format(args.snapshot_dir))
         print(
-            'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_adv = {3:.3f} loss_D = {4:.3f}'.format(
-                i_iter, args.num_steps, loss_seg_value, loss_adv_value, loss_D_value))
+            'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_dist = {3:.3f} loss_adv = {4:.3f} loss_D = {5:.3f}'.format(
+                i_iter, args.num_steps, loss_seg_value, loss_distill_value, loss_adv_value, loss_D_value))
 
         # Snapshots directory
         if not os.path.exists(args.snapshot_dir):

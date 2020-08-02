@@ -11,18 +11,26 @@ from PIL import Image
 
 
 class GTA5DataSet(data.Dataset):
-    def __init__(self, root, list_path, max_iters=None, crop_size=(512, 256), ignore_label=255, set='train'):
+    def __init__(self, root, list_path, max_iters=None, crop_size=(512, 256), ignore_label=255, set='train', num_classes=13):
         self.root = root
         self.list_path = list_path
         self.crop_size = crop_size
         self.ignore_label = ignore_label
+        self.num_classes = num_classes
         self.img_ids = [i_id.strip() for i_id in open(list_path)]
         if not max_iters==None:
             self.img_ids = self.img_ids * int(np.ceil(float(max_iters) / len(self.img_ids)))
         self.files = []
         self.set = set
-        self.id_to_trainid = {7: 0, 8: 1, 11: 2, 19: 3, 20: 4, 21: 5, 23: 6,
-                              24: 7, 25: 8, 26: 9, 28: 10, 32: 11, 33: 12}
+        if self.num_classes == 13:
+            self.id_to_trainid = {7: 0, 8: 1, 11: 2, 19: 3, 20: 4, 21: 5, 23: 6,
+                                  24: 7, 25: 8, 26: 9, 28: 10, 32: 11, 33: 12}
+        elif self.num_classes == 18:
+            self.id_to_trainid = {7: 0, 8: 1, 11: 2, 12: 3, 13: 4, 17: 5, 19: 6,
+                                  20: 7, 21: 8, 23: 9, 24: 10, 25: 11, 26: 12,
+                                  27: 13, 28: 14, 31: 15, 32: 16, 33: 17}
+        else:
+            raise NotImplementedError("Unavailable number of classes")
 
         for name in self.img_ids:
             img_file = osp.join(self.root, self.set, name)
@@ -64,7 +72,8 @@ class GTA5DataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = GTA5DataSet('/work/GTA5', './gta5_list/val.txt', crop_size=(512, 256), ignore_label=255, set='val')
+    dst = GTA5DataSet('/work/GTA5', './gta5_list/val.txt',
+                      crop_size=(512, 256), ignore_label=255, set='val', num_classes=13)
     trainloader = data.DataLoader(dst, batch_size=1)
     for i, data in enumerate(trainloader):
         imgs, labels, name = data
