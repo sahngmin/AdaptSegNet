@@ -270,8 +270,7 @@ def main():
             _, _, _, pred_target = model(images_target)
 
         if args.gan == 'Hinge':
-            loss_adv_target = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
-
+            loss_adv_target = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=True)
         else:
             D_out = model_D(F.softmax(pred_target, dim=1))
             loss_adv_target = bce_loss(D_out,
