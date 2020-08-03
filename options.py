@@ -15,7 +15,7 @@ TARGET = dataset_list[-1]
 SET = 'train'
 NUM_DATASET = len(dataset_list)
 
-SAVE_DIR_NAME = 'single_alignment_hinge_cityscape002'
+SAVE_DIR_NAME = 'single_alignment_hinge_cityscap_new_oo2'
 SEGNET_NAME = 'checkpoint'
 WARPER_NAME = 'SPADE'
 
@@ -35,7 +35,7 @@ UPDATE_DISC = 2
 RANDOM_SEED = 1338
 
 MODEL = 'DeepLab'
-BATCH_SIZE = 8
+BATCH_SIZE = 5
 ITER_SIZE = 1
 NUM_WORKERS = 0
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'

@@ -273,7 +273,7 @@ def main():
             _, _, pred_target, _ = model(images_target)
         else:
             _, _, _, pred_target = model(images_target)
-        
+        _, _, _, pred = model(images)
         if args.gan == 'Hinge':
             loss_adv_target = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=True)
         else:
