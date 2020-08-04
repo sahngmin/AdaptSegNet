@@ -98,7 +98,7 @@ def get_arguments():
 
 def main():
 
-    checkpoint_path = "./snapshots/single_alignment_hinge_cityscape002"
+    checkpoint_path = "./snapshots/single_alignment_hinge_cityscap_new_002_disc4"
     args = get_arguments()
     seed = args.random_seed
     torch.manual_seed(seed)
