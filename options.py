@@ -6,7 +6,7 @@ WARPER = False
 SPADE_WARPER = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 2000
+SAVE_PRED_EVERY = 3000
 NUM_STEPS_STOP = 30000 # early stopping
 NUM_STEPS = 40000
 
@@ -15,7 +15,7 @@ TARGET = dataset_list[-1]
 SET = 'train'
 NUM_DATASET = len(dataset_list)
 
-SAVE_DIR_NAME = 'single_alignment_hinge_cityscap_new_oo2'
+SAVE_DIR_NAME = 'single_alignment_hinge_cityscap_new_002_disc4'
 SEGNET_NAME = 'checkpoint'
 WARPER_NAME = 'SPADE'
 
@@ -30,7 +30,7 @@ GAN = 'Hinge'
 
 LAMBDA_ADV_TARGET = [0.002, 0.002]
 LAMBDA_DISTILLATION = 0.1
-UPDATE_DISC = 2
+UPDATE_DISC = 4
 
 RANDOM_SEED = 1338
 
