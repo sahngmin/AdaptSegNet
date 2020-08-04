@@ -49,14 +49,17 @@ class Hinge(nn.Module):
 
 		self.discriminator = discriminator
 
-	def forward(self, fake_samples, real_samples=None, generator=True, label=None):
+	def forward(self, fake_samples, real_samples=None, generator=True, label=None, new_Hinge=False):
 		if label is None:
 			fake = self.discriminator(fake_samples)
 		else:
 			fake = self.discriminator(fake_samples, label)
 
 		if generator:
-			loss = torch.nn.ReLU()(torch.mean(real_samples) - torch.mean(fake))
+			if new_Hinge:
+				loss = torch.nn.ReLU()(torch.mean(real_samples) - torch.mean(fake))
+			else:
+				loss = -torch.mean(fake)
 		else:
 			if label is None:
 				real = self.discriminator(real_samples)
