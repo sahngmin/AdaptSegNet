@@ -149,7 +149,6 @@ python2_code/
 
 dataset/gta5_dataset.py
 log/
-dataset/
 data/
 checkpoints/
 results/
