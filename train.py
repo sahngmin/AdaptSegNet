@@ -16,6 +16,7 @@ from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
 from data.gta5_dataset import GTA5DataSet
 from data.cityscapes_dataset import cityscapesDataSet
 from data.synthia_dataset import SYNTHIADataSet
+from data.idd_dataset import IDDDataSet
 from utils.tsne_plot import TSNE_plot
 from utils.custom_function import save_model, load_existing_state_dict
 from torch.nn import DataParallel
@@ -159,14 +160,21 @@ def main():
 
     if args.target == 'CityScapes':
         targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target, max_iters=args.num_steps * args.batch_size,
-                                                         crop_size=input_size_target, set=args.set),
+                                                         crop_size=input_size_target, set=args.set, num_classes=args.num_classes),
                                        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                        pin_memory=True)
-    elif args.target == 'Synthia':  # ------------------------SYNTHIA dataloader 필요!!!
+    elif args.target == 'Synthia':
         targetloader = data.DataLoader(SYNTHIADataSet(args.data_dir_target, args.data_list_target,
-                                    max_iters=args.num_steps * args.batch_size, crop_size=input_size_target, set=args.set),
+                                    max_iters=args.num_steps * args.batch_size, crop_size=input_size_target, set=args.set, num_classes=args.num_classes),
                                     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                     pin_memory=True)
+
+    elif args.target == 'IDD':
+        targetloader = data.DataLoader(IDDDataSet(args.data_dir_target, args.data_list_target,
+                                    max_iters=args.num_steps * args.batch_size, crop_size=input_size_target, set=args.set, num_classes=args.num_classes),
+                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                    pin_memory=True)
+
     else:
         raise NotImplementedError('Unavailable target domain')
 

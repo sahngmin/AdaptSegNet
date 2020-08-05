@@ -154,9 +154,9 @@ def main():
             else:
                 _, _, _, pred = model(images_val, input_size)
 
-            pred = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)(pred)
-            labels = labels.unsqueeze(1)
-            labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
+            pred = nn.Upsample(size=(256, 512), mode='bilinear', align_corners=True)(pred)
+            # labels = labels.unsqueeze(1)
+            # labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
             _, pred = pred.max(dim=1)
 
             labels = labels.cpu().numpy()
@@ -189,9 +189,9 @@ def main():
             else:
                 _, _, _, pred = model(images_val, input_size)
 
-            pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-            labels = labels.unsqueeze(1)
-            labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
+            pred = nn.Upsample(size=(256, 512), mode='bilinear', align_corners=True)(pred)
+            # labels = labels.unsqueeze(1)
+            # labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
             _, pred = pred.max(dim=1)
 
             labels = labels.cpu().numpy()
@@ -224,9 +224,9 @@ def main():
             else:
                 _, _, _, pred = model(images_val, input_size)
 
-            pred = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(pred)
-            labels = labels.unsqueeze(1)
-            labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
+            pred = nn.Upsample(size=(256, 512), mode='bilinear', align_corners=True)(pred)
+            # labels = labels.unsqueeze(1)
+            # labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
             _, pred = pred.max(dim=1)
 
             labels = labels.cpu().numpy()
