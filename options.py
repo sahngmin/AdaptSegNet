@@ -40,16 +40,16 @@ ITER_SIZE = 1
 NUM_WORKERS = 1
 # DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
 # DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY = './dataset/GTA5'
+DATA_DIRECTORY = './data/GTA5'
 
 # DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
-DATA_LIST_PATH = './data/gta5_list/train.txt'
+DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
 INPUT_SIZE = '512,256'
 # DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
 # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = './dataset/CityScapes'
-DATA_LIST_PATH_TARGET = './data/cityscapes_list/train.txt'
+DATA_DIRECTORY_TARGET = './data/CityScapes'
+DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '512,256'
 
 NUM_CLASSES = 13

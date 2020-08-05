@@ -13,10 +13,10 @@ import copy
 from options import TrainOptions, dataset_list
 from model.deeplab_DM import Deeplab_DM
 from model.discriminator import FCDiscriminator, Hinge, SpectralDiscriminator
-from data.gta5_dataset import GTA5DataSet
-from data.cityscapes_dataset import cityscapesDataSet
-from data.synthia_dataset import SYNTHIADataSet
-from data.idd_dataset import IDDDataSet
+from dataset.gta5_dataset import GTA5DataSet
+from dataset.cityscapes_dataset import cityscapesDataSet
+from dataset.synthia_dataset import SYNTHIADataSet
+from dataset.idd_dataset import IDDDataSet
 from utils.tsne_plot import TSNE_plot
 from utils.custom_function import save_model, load_existing_state_dict
 from torch.nn import DataParallel
