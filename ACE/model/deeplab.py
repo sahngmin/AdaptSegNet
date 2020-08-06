@@ -3,13 +3,9 @@ import math
 import torch.utils.model_zoo as model_zoo
 import torch
 import numpy as np
-import torch.nn.functional as functional
-from torch.autograd import Variable
-from collections import OrderedDict
-import operator
-from itertools import islice
 
 affine_par = True
+
 
 def outS(i):
     i = int(i)
@@ -21,66 +17,13 @@ def outS(i):
 
 def conv3x3(in_planes, out_planes, stride=1):
     "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=False)
 
-def conv1x1(in_planes, out_planes):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, bias=False)
-
-class Multioutput_Sequential(nn.Module):
-    def __init__(self, *args):
-        super(Multioutput_Sequential, self).__init__()
-        if len(args) == 1 and isinstance(args[0], OrderedDict):
-            for key, module in args[0].items():
-                self.add_module(key, module)
-        else:
-            for idx, module in enumerate(args):
-                self.add_module(str(idx), module)
-
-    def _get_item_by_idx(self, iterator, idx):
-        """Get the idx-th item of the iterator"""
-        size = len(self)
-        idx = operator.index(idx)
-        if not -size <= idx < size:
-            raise IndexError('index {} is out of range'.format(idx))
-        idx %= size
-        return next(islice(iterator, idx, None))
-
-    def __getitem__(self, idx):
-        if isinstance(idx, slice):
-            return self.__class__(OrderedDict(list(self._modules.items())[idx]))
-        else:
-            return self._get_item_by_idx(self._modules.values(), idx)
-
-    def __setitem__(self, idx, module):
-        key = self._get_item_by_idx(self._modules.keys(), idx)
-        return setattr(self, key, module)
-
-    def __delitem__(self, idx):
-        if isinstance(idx, slice):
-            for key in list(self._modules.keys())[idx]:
-                delattr(self, key)
-        else:
-            key = self._get_item_by_idx(self._modules.keys(), idx)
-            delattr(self, key)
-
-    def __len__(self):
-        return len(self._modules)
-
-    def __dir__(self):
-        keys = super(Multioutput_Sequential, self).__dir__()
-        keys = [key for key in keys if not key.isdigit()]
-        return keys
-
-    def __iter__(self):
-        return iter(self._modules.values())
-
-    def forward(self, input):
-        for module in self:
-            input = module(input[0])
-        return input
 
 class BasicBlock(nn.Module):
     expansion = 1
+
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
@@ -152,9 +95,9 @@ class Bottleneck(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        nonlinear_out = self.relu(out)
+        out = self.relu(out)
 
-        return [nonlinear_out, out]
+        return out
 
 
 class Classifier_Module(nn.Module):
@@ -174,56 +117,23 @@ class Classifier_Module(nn.Module):
             out += self.conv2d_list[i + 1](x)
         return out
 
-class DM(nn.Module):
-    def __init__(self, inplanes, num_classes):
-        super(DM, self).__init__()
-        self.module_list = nn.ModuleList()
-        self.module_list.append(conv1x1(inplanes, num_classes))
-        self.module_list.append(nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
-                                              nn.Conv2d(inplanes, num_classes, 1, bias=False),
-                                              nn.ReLU()))
 
-        for i, m in enumerate(self.module_list):
-            if i == 0:
-                m.weight.data.normal_(0, 0.01)
-            else:
-                for n in m:
-                    if isinstance(n, nn.Conv2d):
-                        n.weight.data.normal_(0, 0.01)
-                    elif isinstance(n, nn.BatchNorm2d):
-                        n.weight.data.fill_(1)
-                        n.bias.data.zero_()
-
-    def forward(self, x):
-        out1 = self.module_list[0](x)
-        out2 = self.module_list[1](x)
-        return out1, out2
-
-class ResNet_DM(nn.Module):
-    def __init__(self, block, layers, num_classes, args=None):
-        super(ResNet_DM, self).__init__()
-        self.num_target = args.num_target
-        self.num_classes = num_classes
-        self.batch_size = args.batch_size
-
+class ResNet(nn.Module):
+    def __init__(self, block, layers, num_classes):
         self.inplanes = 64
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        super(ResNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(64, affine=affine_par)
         for i in self.bn1.parameters():
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
-
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
-
-        for num in range(self.num_target):
-            DM_name = 'DM' + str(num + 1)
-            setattr(self, DM_name, DM(2048, num_classes))  # without skip connection
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -248,45 +158,29 @@ class ResNet_DM(nn.Module):
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, dilation=dilation))
 
-        return Multioutput_Sequential(*layers)
+        return nn.Sequential(*layers)
 
     def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
         return block(inplanes, dilation_series, padding_series, num_classes)
 
-
-    def forward(self, image, input_size, map=None):
-
-        x = self.conv1(image)
+    def forward(self, x, input_size):
+        x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        x = self.layer1([x])
+        x = self.layer1(x)
         x = self.layer2(x)
+
         x = self.layer3(x)
 
-        x1 = self.layer4(x)
+        x2 = self.layer4(x)
+        x2 = self.layer6(x2)
 
-        x2 = self.layer6(x1[0])
-        output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
+        x2 = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
 
-        DM_name = 'DM' + str(self.num_target)
-        # DM_name = 'DM1'
+        return x2
 
-        x3 = x1[0]  # nonlinear(0)/linear(1) output
-
-        x3_1, x3_2 = getattr(self, DM_name)(x3)
-        new_x = x2 + x2.view(x2.shape[0], self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
-                ((x3_1 - x3_1.view(x2.shape[0], self.num_classes, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
-                 x3_1.view(x2.shape[0], self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3))
-        new_x += x2.view(x2.shape[0], self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
-                 (x3_2 - x3_2.view(x2.shape[0], -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
-                 x3_2.view(x2.shape[0], -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
-        output = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
-
-        return output, output_ori
-
-
-    def ResNet_params(self):
+    def get_1x_lr_params_NOscale(self):
         """
         This generator returns all the parameters of the net except for
         the last classification layer. Note that for each batchnorm layer,
@@ -310,7 +204,7 @@ class ResNet_DM(nn.Module):
                     if k.requires_grad:
                         yield k
 
-    def ASPP_params(self):
+    def get_10x_lr_params(self):
         """
         This generator returns all the parameters for the last layer of the net,
         which does the classification of pixel into classes
@@ -322,32 +216,17 @@ class ResNet_DM(nn.Module):
             for i in b[j]:
                 yield i
 
-    def DM_params(self, args):
-        DM_name = 'DM' + str(args.num_target)
-
-        b = []
-        b.append(getattr(self, DM_name).parameters())
-
-        for j in range(len(b)):
-            for i in b[j]:
-                yield i
-
     def optim_parameters(self, args):
         if args.from_scratch:
-            optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                {'params': self.ASPP_params(), 'lr': 10 * args.learning_rate},
-                                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
+            result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
+                      {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
         else:
-            optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
-                                {'params': self.ASPP_params(), 'lr': args.learning_rate},
-                                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
-        return optim_parameters
+            result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
+                      {'params': self.get_10x_lr_params(), 'lr': args.learning_rate}]
+        return result
 
 
-def Deeplab_DM(args=None):
-    model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args)
+def Deeplab(args):
+    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes)
     return model
-
-
-
 

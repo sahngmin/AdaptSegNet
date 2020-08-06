@@ -9,8 +9,7 @@ import torchvision
 from torch.utils import data
 from PIL import Image
 
-
-class GTA5DataSet(data.Dataset):
+class cityscapesDataSet(data.Dataset):
     def __init__(self, root, list_path, max_iters=None, crop_size=(512, 256), ignore_label=255, set='train', num_classes=13):
         self.root = root
         self.list_path = list_path
@@ -33,8 +32,8 @@ class GTA5DataSet(data.Dataset):
             raise NotImplementedError("Unavailable number of classes")
 
         for name in self.img_ids:
-            img_file = osp.join(self.root, self.set, name)
-            label_file = osp.join(self.root, "labels/%s" % name)
+            img_file = osp.join(self.root, "leftImg8bit/%s/%s" % (self.set, name))
+            label_file = osp.join(self.root, "gtFine/%s/%s_gtFine_labelIds.png" % (self.set, name[:-16]))
             self.files.append({
                 "img": img_file,
                 "label": label_file,
@@ -43,7 +42,6 @@ class GTA5DataSet(data.Dataset):
 
     def __len__(self):
         return len(self.files)
-
 
     def __getitem__(self, index):
         datafiles = self.files[index]
@@ -59,7 +57,6 @@ class GTA5DataSet(data.Dataset):
         image = np.asarray(image, np.float32)
         label = np.asarray(label, np.float32)
 
-        # re-assign labels to match the format of Cityscapes
         label_copy = 255 * np.ones(label.shape, dtype=np.float32)
         for k, v in self.id_to_trainid.items():
             label_copy[label == k] = v
@@ -72,8 +69,8 @@ class GTA5DataSet(data.Dataset):
 
 
 if __name__ == '__main__':
-    dst = GTA5DataSet('/work/GTA5', './gta5_list/val.txt',
-                      crop_size=(512, 256), ignore_label=255, set='val', num_classes=18)
+    dst = cityscapesDataSet('/work/CityScapes', './cityscapes_list/val.txt',
+                            crop_size=(512, 256), ignore_label=255, set='val', num_classes=18)
     trainloader = data.DataLoader(dst, batch_size=1)
     for i, data in enumerate(trainloader):
         imgs, labels, name = data

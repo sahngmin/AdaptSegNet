@@ -3,12 +3,12 @@ import argparse
 SOURCE_ONLY = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 3000
-NUM_STEPS_STOP = 30000  # early stopping
-NUM_STEPS = 40000
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 100000  # early stopping
+NUM_STEPS = 100000
 
-SOURCE = 'GTA5'
-TARGET = 'CityScapes'  # 'SYNTHIA' or 'CityScapes'
+SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
+TARGET = 'CityScapes'  # 'CityScapes' or 'IDD'
 SET = 'train'
 
 LEARNING_RATE = 2.5e-4
@@ -18,10 +18,10 @@ POWER = 0.9
 
 LEARNING_RATE_D = 1e-4
 
-GAN = 'LS'
+GAN = 'LS'  # 'Vanilla' or 'LS' or 'Hinge'
 
-LAMBDA_ADV = 0.001
-LAMBDA_DISTILL = 0.1
+LAMBDA_ADV = 0.0015
+LAMBDA_DISTILL = 0.2
 
 RANDOM_SEED = 1338
 
@@ -30,19 +30,25 @@ IGNORE_LABEL = 255
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 
-DATA_DIRECTORY = '/work/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+if SOURCE == 'GTA5':
+    DATA_DIRECTORY = '/work/GTA5'
+    DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+    NUM_CLASSES = 18
+elif SOURCE == 'SYNTHIA':
+    DATA_DIRECTORY = '/work/SYNTHIA'
+    DATA_LIST_PATH = './dataset/synthia_list/train.txt'
+    NUM_CLASSES = 13
 INPUT_SIZE = '512,256'
 
-DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
-NUM_TARGET = 1
-# DATA_DIRECTORY_TARGET = '/work/SYNTHIA'
-# DATA_LIST_PATH_TARGET = './dataset/synthia_list/train.txt'
-# NUM_TARGET = 2
+if TARGET == 'CityScapes':
+    DATA_DIRECTORY_TARGET = '/work/CityScapes'
+    DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+    NUM_TARGET = 1
+elif TARGET == 'IDD':
+    DATA_DIRECTORY_TARGET = '/work/IDD'
+    DATA_LIST_PATH_TARGET = './dataset/idd_list/train.txt'
+    NUM_TARGET = 2
 INPUT_SIZE_TARGET = '512,256'
-
-NUM_CLASSES = 13
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 

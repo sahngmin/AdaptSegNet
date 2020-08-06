@@ -10,10 +10,11 @@ import random
 import copy
 from options import TrainOptions
 from model.deeplab_DM import Deeplab_DM
-from model.discriminator import FCDiscriminator
+from model.discriminator import FCDiscriminator, SpectralDiscriminator, Hinge
 from dataset.gta5_dataset import GTA5DataSet
-from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.synthia_dataset import SYNTHIADataSet
+from dataset.cityscapes_dataset import cityscapesDataSet
+from dataset.idd_dataset import IDDDataSet
 
 PRE_TRAINED_SEG = ''
 # PRE_TRAINED_SEG = './snapshots/GTA5_CityScapes_DM/30000.pth'
@@ -23,8 +24,12 @@ args = TrainOptions().parse()
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
 
+def lr_power(base_lr, iter, power, interval):
+    return base_lr * pow(power, int(iter / interval))
+
 def adjust_learning_rate(optimizer, i_iter, args):
-    lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
+    # lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
+    lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) > 1:
         if args.from_scratch:
@@ -36,7 +41,8 @@ def adjust_learning_rate(optimizer, i_iter, args):
                 optimizer.param_groups[i]['lr'] = lr * 10
 
 def adjust_learning_rate_D(optimizer, i_iter):
-    lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
+    # lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
+    lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
 
 def distillation_loss(pred_origin, old_outputs):
@@ -51,7 +57,7 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
+    torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
@@ -62,7 +68,7 @@ def main():
     w, h = map(int, args.input_size_target.split(','))
     input_size_target = (w, h)
 
-    cudnn.enabled = True
+    # cudnn.enabled = True
 
     # Create network
     model = Deeplab_DM(args=args)
@@ -96,11 +102,23 @@ def main():
     model.train()
     model.to(device)
 
-    cudnn.benchmark = True
+    cudnn.benchmark = False  # False for reproducibility
+    """
+    benchmark mode is good whenever your input sizes for your network do not vary. This way, cudnn will look for 
+    the optimal set of algorithms for that particular configuration (which takes some time) for your hardware. 
+    This usually leads to faster runtime. 
+    But if your input sizes changes at each iteration, then cudnn will benchmark every time a new size appears, 
+    possibly leading to worse runtime performances.
+    """
 
     # init D
     if not args.source_only:
-        model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+        if args.gan == 'LS' or 'Vanilla':
+            model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+        elif args.gan == 'Hinge':
+            model_D = SpectralDiscriminator(num_classes=args.num_classes).to(device)
+        else:
+            raise NotImplementedError('Unavailable GAN option')
 
         model_D.train()
         model_D.to(device)
@@ -113,10 +131,20 @@ def main():
         ref_model.eval()
 
     # Dataloader
-    trainloader = data.DataLoader(
-        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
-                    crop_size=input_size, ignore_label=args.ignore_label, set=args.set, num_classes=args.num_classes),
-        batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    if args.source == 'GTA5':
+        trainloader = data.DataLoader(
+            GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+                        crop_size=input_size, ignore_label=args.ignore_label,
+                        set=args.set, num_classes=args.num_classes),
+            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    elif args.source == 'SYNTHIA':
+        trainloader = data.DataLoader(
+            SYNTHIADataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+                           crop_size=input_size, ignore_label=args.ignore_label,
+                           set=args.set, num_classes=args.num_classes),
+            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    else:
+        raise NotImplementedError('Unavailable source domain')
     trainloader_iter = enumerate(trainloader)
 
     if not args.source_only:
@@ -128,12 +156,12 @@ def main():
                                                              set=args.set, num_classes=args.num_classes),
                                            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                            pin_memory=True)
-        elif args.target == 'SYNTHIA':
-            targetloader = data.DataLoader(SYNTHIADataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             ignore_label=args.ignore_label,
-                                                             set=args.set, num_classes=args.num_classes),
+        elif args.target == 'IDD':
+            targetloader = data.DataLoader(IDDDataSet(args.data_dir_target, args.data_list_target,
+                                                      max_iters=args.num_steps * args.batch_size,
+                                                      crop_size=input_size_target,
+                                                      ignore_label=args.ignore_label,
+                                                      set=args.set, num_classes=args.num_classes),
                                            batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                            pin_memory=True)
         else:
@@ -153,6 +181,10 @@ def main():
             bce_loss = torch.nn.BCEWithLogitsLoss()
         elif args.gan == 'LS':
             bce_loss = torch.nn.MSELoss()
+        elif args.gan == 'Hinge':
+            adversarial_loss = Hinge(model_D)
+        else:
+            raise NotImplementedError('Unavailable GAN option')
 
         # labels for adversarial training
         source_label = 1
@@ -193,7 +225,7 @@ def main():
         loss_seg_value += loss_seg.item()
 
         if not args.from_scratch:
-            _, old_outputs = ref_model(images)
+            _, old_outputs = ref_model(images, input_size)
             loss_distill = distillation_loss(pred_ori, old_outputs)
             loss += args.lambda_distill * loss_distill
             loss_distill_value += loss_distill.item()
@@ -207,9 +239,12 @@ def main():
 
             pred_target, _ = model(images_target, input_size_target)
 
-            D_out = model_D(F.softmax(pred_target, dim=1))
+            if args.gan == 'Hinge':
+                loss_adv = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
+            else:
+                D_out = model_D(F.softmax(pred_target, dim=1))
 
-            loss_adv = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                loss_adv = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
             loss = args.lambda_adv * loss_adv
             loss_adv_value += loss_adv.item()
@@ -221,29 +256,32 @@ def main():
             for param in model_D.parameters():
                 param.requires_grad = True
 
-            # train with source
+
             pred = pred.detach()
-
-            D_out = model_D(F.softmax(pred, dim=1))
-
-            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
-            loss_D = loss_D / 2
-
-            loss_D.backward()
-
-            loss_D_value += loss_D.item()
-
-            # train with target
             pred_target = pred_target.detach()
 
-            D_out = model_D(F.softmax(pred_target, dim=1))
+            if args.gan == 'Hinge':
+                loss_D = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=False)
+                loss_D.backward()
+                loss_D_value += loss_D.item()
+            else:
+                # train with source
+                D_out = model_D(F.softmax(pred, dim=1))
 
-            loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
+                loss_D = loss_D / 2
 
-            loss_D = loss_D / 2
+                loss_D.backward()
+                loss_D_value += loss_D.item()
 
-            loss_D.backward()
-            loss_D_value += loss_D.item()
+                # train with target
+                D_out = model_D(F.softmax(pred_target, dim=1))
+
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
+                loss_D = loss_D / 2
+
+                loss_D.backward()
+                loss_D_value += loss_D.item()
 
         optimizer.step()
         if not args.source_only:
