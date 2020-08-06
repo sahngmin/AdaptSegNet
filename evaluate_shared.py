@@ -13,9 +13,9 @@ import torch.nn.functional as F
 from torch.utils import data, model_zoo
 from model.deeplab import Deeplab
 from model.deeplab_DM import Deeplab_DM
-from data.gta5_dataset import GTA5DataSet
-from data.synthia_dataset import SYNTHIADataSet
-from data.cityscapes_dataset import cityscapesDataSet
+from dataset.gta5_dataset import GTA5DataSet
+from dataset.synthia_dataset import SYNTHIADataSet
+from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
 import os.path as osp
@@ -26,14 +26,14 @@ MEMORY = False
 WARPER = False
 NUM_DATASET = 1
 
-DATA_DIRECTORY = './dataset/GTA5'
-DATA_LIST_PATH = './data/gta5_list/val.txt'
+DATA_DIRECTORY = './data/GTA5'
+DATA_LIST_PATH = './dataset/gta5_list/val.txt'
 
-DATA_DIRECTORY_TARGET1 = './dataset/SYNTHIA'
-DATA_LIST_PATH_TARGET1 = './data/synthia_list/val.txt'
+DATA_DIRECTORY_TARGET1 = './data/SYNTHIA'
+DATA_LIST_PATH_TARGET1 = './dataset/synthia_list/val.txt'
 
-DATA_DIRECTORY_TARGET2 = './dataset/CityScapes'
-DATA_LIST_PATH_TARGET2 = './data/cityscapes_list/val.txt'
+DATA_DIRECTORY_TARGET2 = './data/CityScapes'
+DATA_LIST_PATH_TARGET2 = './dataset/cityscapes_list/val.txt'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 13
@@ -90,7 +90,6 @@ def get_arguments():
     parser.add_argument("--feat-warp", default=True)
     parser.add_argument("--multi_gpu", default=True)
     parser.add_argument("--input_size", default=INPUT_SIZE)
-    parser.add_argument("--spadeWarper", default=False)
 
 
     return parser.parse_args()

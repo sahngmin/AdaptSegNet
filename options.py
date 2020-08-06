@@ -19,6 +19,8 @@ SAVE_DIR_NAME = 'single_alignment_hinge_cityscap_new_002_disc4'
 SEGNET_NAME = 'checkpoint'
 WARPER_NAME = 'SPADE'
 
+CHECKPOINT = ''
+
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 WEIGHT_DECAY = 0.0005
@@ -156,16 +158,12 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
         self.parser.add_argument("--input_size", default=INPUT_SIZE)
         self.parser.add_argument("--update_disc", default=UPDATE_DISC)
+        self.parser.add_argument("--checkpoint", default=CHECKPOINT)
 
-
-        self.parser.add_argument("--warper", action='store_true', default=WARPER)
-        self.parser.add_argument("--feat-warp", default=True)
         self.parser.add_argument("--multi_gpu", default=False)
-        self.parser.add_argument("--spadeWarper", default=SPADE_WARPER)
 
         self.parser.add_argument("--dir_name", default=SAVE_DIR_NAME)
         self.parser.add_argument("--segnet_name", default=SEGNET_NAME)
-        self.parser.add_argument("--warper_name", default=WARPER_NAME)
 
         # SPADE options
         self.parser.add_argument('--norm_G', type=str, default='spectralspadesyncbatch3x3',

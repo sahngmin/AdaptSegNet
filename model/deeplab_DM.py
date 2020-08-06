@@ -15,7 +15,6 @@ import pdb
 
 affine_par = True
 
-
 def outS(i):
     i = int(i)
     i = (i + 1) / 2
@@ -247,10 +246,6 @@ class ResNet_DM(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
-        if args.warper:
-            # self.WarpModel = Warper(args=args)
-            self.WarpModel = ConvWarper(num_channel=args.num_classes)
-
 
         if args.memory:
             for num_dataset in range(len_dataset):
@@ -317,35 +312,8 @@ class ResNet_DM(nn.Module):
             new_x += F.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
             output_both = nn.Upsample(size=(self.input_size[1], self.input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
-        if self.warper:
-            if label is not None:
-                warper, warp_list = self.WarpModel(input, label)
-            else:
-                # x2_softmax = nn.Softmax()(x2_up)
-                # x2_filtered = self.threshold(x2_softmax)
-                # warper, warp_list = self.WarpModel(image, x2_filtered)
-
-                if not self.memory:
-                    warper, warp_list = self.WarpModel(output_ori, None)
-                    output_ori_warped = self.warp(output_ori, warper)
-                else:
-                    warper, warp_list = self.WarpModel(output_both, None)
-                    output_both_warped = self.warp(output_both, warper)
-
-        if self.args.spadeWarper:
-            if label is None:
-                confidence = F.softmax(output_ori, dim=1)
-                _, topk = torch.topk(confidence, 1, dim=1)
-                label = topk.squeeze(1).to(self.device)
-
-            edge_map = self.preprocess_input(label)
-            warper = self.WarpModel(edge_map, z=output_ori)
-
-            if not self.memory:
-                output_ori_warped = self.warp(output_ori, warper)
-            else:
-                output_both_warped = self.warp(output_both, warper)
         return output_both_warped, output_ori_warped, output_both, output_ori
+
 
     def ResNet_params(self):
         """
@@ -411,57 +379,6 @@ class ResNet_DM(nn.Module):
 
         return optim_parameters
 
-
-    def parameters_warp(self, args):
-        optim_parameters = [{'params': self.WarpModel.parameters(), 'lr': 10 * args.learning_rate}]
-        return optim_parameters
-
-    def warp(self, input, warper):
-        xs1 = np.linspace(-1, 1, input.size(2))
-        xs2 = np.linspace(-1, 1, input.size(3))
-        xs = np.meshgrid(xs2, xs1)
-        xs = np.stack(xs, 2)
-        xs = torch.Tensor(xs).unsqueeze(0).repeat(input.size(0), 1, 1, 1)
-        xs = xs.to(self.device)
-
-        sampled = torch.zeros(input.size()).cuda()
-        for i in range(warper.size(1) // 2):
-            sampler = 0.2 * nn.Tanh()(warper[:, i * 2:(i + 1) * 2, :, :]).permute(0, 2, 3, 1) + Variable(xs, requires_grad=False)
-            sampler = sampler.clamp(min=-1, max=1)
-        sampled = F.grid_sample(input, sampler)
-
-        return sampled
-
-    def preprocess_input(self, map):
-        # move to GPU and change data types
-        label_map = map.unsqueeze(1)
-
-        # create one-hot label map
-        # torch.Size([1, 184, 256, 256])
-        bs, _, h, w = label_map.size()
-        nc = self.opt.semantic_nc
-        input_label = self.FloatTensor(bs, nc, h, w).zero_()
-        label_map[label_map == 255] = 10
-        # pdb.set_trace()
-        input_semantics = input_label.scatter_(1, label_map, 1.0)
-        # instance_label = False
-        # if instance_label:
-        #     inst_map = image
-        #     instance_edge_map = self.get_edges(inst_map)
-        #     input_semantics = torch.cat((input_semantics, instance_edge_map), dim=1)
-
-        return input_semantics
-
-    # def get_edges(self, t):
-    #     edge = self.ByteTensor(t.size()).zero_()
-    #     edge[:, :, :, 1:] = edge[:, :, :, 1:] | (t[:, :, :, 1:] != t[:, :, :, :-1])
-    #     edge[:, :, :, :-1] = edge[:, :, :, :-1] | (t[:, :, :, 1:] != t[:, :, :, :-1])
-    #     edge[:, :, 1:, :] = edge[:, :, 1:, :] | (t[:, :, 1:, :] != t[:, :, :-1, :])
-    #     edge[:, :, :-1, :] = edge[:, :, :-1, :] | (t[:, :, 1:, :] != t[:, :, :-1, :])
-    #     return edge.float()
-
-    def use_gpu(self):
-        return len(self.opt.gpu_ids) > 0
 
 def Deeplab_DM(args=None, device='cpu'):
     model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset, device=device)

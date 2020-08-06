@@ -93,26 +93,20 @@ def main():
     model = Deeplab_DM(args=args, device=device)
     optimizer = optim.SGD(model.parameters_seg(args),
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-    if (args.warper or args.spadeWarper):
-        optimizer_warp = optim.Adam(model.parameters_warp(args), lr=args.learning_rate)
-    else:
-        optimizer_warp = None
+
     # model_D = FCDiscriminator(num_classes=args.num_classes)
     model_D = SpectralDiscriminator(num_classes=args.num_classes)
     optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
 
-
-    checkpoint = None
-    if checkpoint is not None:
-        checkpoint_file = torch.load(checkpoint)
+    if args.checkpoint == '':
+        args.checkpoint = None
+    if args.checkpoint is not None:
+        checkpoint_file = torch.load(args.checkpoint)
         model = load_existing_state_dict(model, checkpoint_file['state_dict_seg'])
         model_D = load_existing_state_dict(model_D, checkpoint_file['discriminator'])
         optimizer = load_existing_state_dict(optimizer, checkpoint_file['optimizer_seg'])
         optimizer_D = load_existing_state_dict(optimizer_D, checkpoint_file['optimizer_disc'])
-        if checkpoint_file['optimizer_warp'] is not None:
-            optimizer_warp = load_existing_state_dict(optimizer_warp, checkpoint_file['optimizer_warp'])
         del checkpoint_file
-
 
     if args.from_scratch:  # training model from pre-trained ResNet on source & target domain
         if args.restore_from_resnet[:4] == 'http':
@@ -127,21 +121,6 @@ def main():
             if not i_parts[1] == 'layer5':
                 new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
         model.load_state_dict(new_params)
-    else:  # training model from pre-trained DeepLab on source & target domain
-        saved_state_dict = torch.load(PRE_TRAINED_SEG, map_location=device)
-        new_params = model.state_dict().copy()
-        for i in saved_state_dict:
-            if i in new_params.keys():
-                new_params[i] = saved_state_dict[i]
-        model.load_state_dict(new_params)
-
-    if PRE_TRAINED_DISC is not None:
-        saved_state_dict_D = torch.load(PRE_TRAINED_DISC, map_location=device)
-        new_params = model_D.state_dict().copy()
-        for i in saved_state_dict_D:
-            if i in new_params.keys():
-                new_params[i] = saved_state_dict_D[i]
-        model_D.load_state_dict(new_params)
 
     if args.multi_gpu:
         model = DataParallel(model)
@@ -202,8 +181,6 @@ def main():
     # cudnn.benchmark = True
     optimizer.zero_grad()
     optimizer_D.zero_grad()
-    if (args.warper or args.spadeWarper):
-        optimizer_warp.zero_grad()
 
     seg_loss = torch.nn.CrossEntropyLoss(ignore_index=255)
 
@@ -217,7 +194,7 @@ def main():
     print("start training")    
     for i_iter in range(args.num_steps):
 
-        loss_seg_value_before_warped = 0
+        loss_seg = 0
         loss_seg_value_after_warped = 0
         loss_distillation_value = 0
         loss_adv_target_value = 0
@@ -230,10 +207,6 @@ def main():
             optimizer_D.zero_grad()
             adjust_learning_rate_D(optimizer_D, i_iter)
 
-        if (args.warper or args.spadeWarper):
-            optimizer_warp.zero_grad()
-            adjust_learning_rate(optimizer_warp, i_iter, args)
-
         # train G
         if not args.source_only:
             for param in model_D.parameters():
@@ -245,20 +218,14 @@ def main():
         images = images.to(device)
         labels = labels.long().to(device)
 
-        if (args.warper or args.spadeWarper) and args.memory:
-            pred_warped, _, pred, pred_ori = model(images)
-        elif args.warper:
-            _, pred_warped, _, pred = model(images)
-        elif args.spadeWarper:
-            _, pred_warped, _, pred = model(images, labels)
-        elif args.memory:
+        if args.memory:
             _, _, pred, pred_ori = model(images)
         else:
             _, _, _, pred = model(images)
 
         loss_seg = seg_loss(pred, labels)
         loss = loss_seg
-        loss_seg_value_before_warped += loss_seg.item()
+        loss_seg += loss_seg.item()
 
         if not args.source_only and args.memory and not args.num_dataset == 1:
             _, _, _, old_outputs = ref_model(images)
@@ -273,11 +240,7 @@ def main():
         images_target, _, _= batch
         images_target = images_target.to(device)
        
-        if args.warper and args.memory:
-            pred_target_warped, _, pred_target, _ = model(images_target)
-        elif (args.warper or args.spadeWarper):
-            _, pred_target_warped, _, pred_target = model(images_target)
-        elif args.memory:
+        if args.memory:
             _, _, pred_target, _ = model(images_target)
         else:
             _, _, _, pred_target = model(images_target)
@@ -294,20 +257,10 @@ def main():
         loss_adv_target_value += loss_adv_target.item()
         loss.backward()
         optimizer.step()
-        
-        if (args.warper or args.spadeWarper):
-            optimizer_warp.step()
 
         for k in range(args.update_disc):
             # train D
-
-            if (args.warper or args.spadeWarper) and args.memory:
-                pred_warped, _, pred, pred_ori = model(images)
-            elif args.warper:
-                _, pred_warped, _, pred = model(images)
-            elif args.spadeWarper:
-                _, pred_warped, _, pred = model(images, labels)
-            elif args.memory:
+            if args.memory:
                 _, _, pred, pred_ori = model(images)
             else:
                 _, _, _, pred = model(images)
@@ -343,24 +296,10 @@ def main():
             optimizer_D.step()
         loss_D_value = loss_D_value / args.update_disc
 
-        # if (args.warper or args.spadeWarper):  # retain_graph=True -> CUDA out of memory
-        #     if args.memory:  # feed-forwarding the input again
-        #         pred_warped, _, pred, _ = model(images)
-        #     else:
-        #         _, pred_warped, _, pred = model(images)
-        #
-        #     loss_seg = seg_loss(pred_warped, labels)
-        #     loss = loss_seg
-        #     loss_seg_value_after_warped += loss_seg.item()
-        #     loss.backward()
-        #     optimizer_warp.step()
-
-
         if i_iter % 10 == 0:
             if args.tensorboard:
                 scalar_info = {
-                    'Train/loss_seg_before_warped': loss_seg_value_before_warped,
-                    'Train/loss_seg_after_warped': loss_seg_value_after_warped,
+                    'Train/loss_seg': loss_seg,
                     'Train/loss_distillation': loss_distillation_value,
                     'Train/loss_adv_target': loss_adv_target_value,
                     'Train/loss_D': loss_D_value
@@ -369,20 +308,20 @@ def main():
                     writer.add_scalar(key, val, i_iter)
 
         print(
-            'iter = {0:8d}/{1:8d}, loss_seg_before_warped = {2:.3f} loss_seg_after_warped = {3:.3f} loss_distill = {4:.3f} loss_adv = {5:.3f} loss_D = {6:.3f}'.format(
-                i_iter, args.num_steps, loss_seg_value_before_warped, loss_seg_value_after_warped, loss_distillation_value,
+            'iter = {0:8d}/{1:8d}, loss_seg_before_warped = {2:.3f} loss_distill = {4:.3f} loss_adv = {5:.3f} loss_D = {6:.3f}'.format(
+                i_iter, args.num_steps, loss_seg, loss_distillation_value,
                 loss_adv_target_value, loss_D_value))
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
-            model_save_name, info = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp,
+            model_save_name, info = save_model(args, model, model_D, optimizer, optimizer_D,
                                                args.snapshot_dir, args.dir_name)
             model_save_name += '_' + str(i_iter)
             torch.save(info, model_save_name + '.pth')
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
-            model_save_name, info = save_model(i_iter, args, model, model_D, optimizer, optimizer_D, optimizer_warp,
+            model_save_name, info = save_model(args, model, model_D, optimizer, optimizer_D,
                                                args.snapshot_dir, args.dir_name)
             model_save_name += '_' + str(args.num_steps_stop)
             torch.save(info, model_save_name + '.pth')

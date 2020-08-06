@@ -5,7 +5,7 @@ from options import TrainOptions, dataset_list
 
 
 # ---------------------------------------------- save model -----------------------------------------------------
-def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimizer_warp, snapshot_dir, dir_name):
+def save_model(args, SegModel, model_D, optimizer, optimizer_D, snapshot_dir, dir_name):
     # Snapshots directory
     if args.multi_gpu:
         info = {'state_dict_seg': SegModel.module.state_dict()}
@@ -16,14 +16,8 @@ def save_model(i_iter, args, SegModel, model_D, optimizer, optimizer_D, optimize
     info['discriminator'] = model_D.state_dict()
     info['optimizer_disc'] = optimizer_D.state_dict()
 
-    if (args.warper or args.spadeWarper):
-        info['optimizer_warp'] = optimizer_warp.state_dict()
-    else:
-        info['optimizer_warp'] = None
-
     # SegNet_name = 'checkpoint'
     SegNet_name = args.segnet_name
-
     dir_path = osp.join(snapshot_dir, dir_name)
 
     if not os.path.exists(dir_path):
