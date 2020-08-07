@@ -252,28 +252,30 @@ def main():
         if not args.source_only:
             optimizer_D.step()
 
-        print('exp = {}'.format(args.snapshot_dir))
+        print('exp = {}'.format(osp.join(args.snapshot_dir, args.dir_name)))
         print(
             'iter = {0:8d}/{1:8d}, loss_seg = {2:.3f} loss_adv = {3:.3f} loss_D = {4:.3f}'.format(
                 i_iter, args.num_steps, loss_seg_value, loss_adv_value, loss_D_value))
 
         # Snapshots directory
-        if not os.path.exists(args.snapshot_dir):
-            os.makedirs(args.snapshot_dir)
+        if not os.path.exists(osp.join(args.snapshot_dir, args.dir_name)):
+            os.makedirs(osp.join(args.snapshot_dir, args.dir_name))
 
         # Save model
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
-            torch.save(model.state_dict(), osp.join(args.snapshot_dir, str(args.num_steps_stop) + '.pth'))
+            torch.save(model.state_dict(),
+                       osp.join(args.snapshot_dir, args.dir_name, str(args.num_steps_stop) + '.pth'))
             if not args.source_only:
-                torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, str(args.num_steps_stop) + '_D.pth'))
+                torch.save(model_D.state_dict(),
+                           osp.join(args.snapshot_dir, args.dir_name, str(args.num_steps_stop) + '_D.pth'))
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
-            torch.save(model.state_dict(), osp.join(args.snapshot_dir, str(i_iter) + '.pth'))
+            torch.save(model.state_dict(), osp.join(args.snapshot_dir, args.dir_name, str(i_iter) + '.pth'))
             if not args.source_only:
-                torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, str(i_iter) + '_D.pth'))
+                torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, args.dir_name, str(i_iter) + '_D.pth'))
 
 if __name__ == '__main__':
     main()

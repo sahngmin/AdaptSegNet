@@ -3,13 +3,15 @@ import argparse
 SOURCE_ONLY = True
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 3000
-NUM_STEPS_STOP = 30000  # early stopping
-NUM_STEPS = 30000
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 50000  # early stopping
+NUM_STEPS = 50000
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 TARGET = 'CityScapes'  # 'CityScapes' or 'IDD'
 SET = 'train'
+
+DIR_NAME = ''
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -131,3 +133,4 @@ class TrainOptions(BaseOptions):
                             help="choose the GAN objective.")
         self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
+        self.parser.add_argument("--dir-name", type=str, default=DIR_NAME)

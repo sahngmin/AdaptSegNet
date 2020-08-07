@@ -11,6 +11,7 @@ from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.idd_dataset import IDDDataSet
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
+DIR_NAME = ''
 
 GTA5 = True
 SYNTHIA = True
@@ -18,8 +19,8 @@ CityScapes = True
 IDD = True
 PER_CLASS = True
 
-SAVE_PRED_EVERY = 3000
-NUM_STEPS_STOP = 30000
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 50000
 
 BATCH_SIZE = 6
 
@@ -90,7 +91,7 @@ def get_arguments():
 
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
-
+    parser.add_argument("--dir-name", type=str, default=DIR_NAME)
     return parser.parse_args()
 
 
@@ -147,7 +148,7 @@ def main():
     model = Deeplab(args=args)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
-        saved_state_dict = torch.load('./snapshots/' + str((files + 1) * args.save_pred_every) + '.pth')
+        saved_state_dict = torch.load('./snapshots/' + args.dir_name + '/' + str((files + 1) * args.save_pred_every) + '.pth')
         # saved_state_dict = torch.load('./snapshots/' + '30000.pth')
         model.load_state_dict(saved_state_dict)
 

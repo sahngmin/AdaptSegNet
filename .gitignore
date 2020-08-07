@@ -13,3 +13,6 @@ python2_code/
 ACE/pretrained_snapshot/
 ACE/snapshots/
 ACE/memory/
+
+log/
+result/
