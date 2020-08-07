@@ -16,6 +16,7 @@ from model.deeplab_DM import Deeplab_DM
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.synthia_dataset import SYNTHIADataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
+from dataset.idd_dataset import IDDDataSet
 from collections import OrderedDict
 import os
 import os.path as osp
@@ -24,7 +25,6 @@ from PIL import Image
 SOURCE_ONLY = False
 MEMORY = False
 WARPER = False
-NUM_DATASET = 1
 
 DATA_DIRECTORY = './data/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/val.txt'
@@ -34,6 +34,9 @@ DATA_LIST_PATH_TARGET1 = './dataset/synthia_list/val.txt'
 
 DATA_DIRECTORY_TARGET2 = './data/CityScapes'
 DATA_LIST_PATH_TARGET2 = './dataset/cityscapes_list/val.txt'
+
+DATA_DIRECTORY_IDD = './data/IDD_Segmentation'
+DATA_LIST_PATH_IDD = './dataset/idd_list/val.txt'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 13
@@ -72,6 +75,11 @@ def get_arguments():
     parser.add_argument("--data-list-target2", type=str, default=DATA_LIST_PATH_TARGET2,
                         help="Path to the file listing the images in the target dataset.")
 
+    parser.add_argument("--data-dir-idd", type=str, default=DATA_DIRECTORY_IDD,
+                        help="Path to the directory containing the target dataset.")
+    parser.add_argument("--data-list-idd", type=str, default=DATA_LIST_PATH_IDD,
+                        help="Path to the file listing the images in the target dataset.")
+
     parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
                         help="The index of the label to ignore during the training.")
     parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
@@ -84,7 +92,6 @@ def get_arguments():
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
     parser.add_argument("--memory", action='store_true', default=MEMORY)
-    parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
     parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
     parser.add_argument("--warper", action='store_true', default=WARPER)
     parser.add_argument("--feat-warp", default=True)
@@ -237,6 +244,35 @@ def main():
             print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
         print('===> mIoU (Target2): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
         print('=' * 50)
+
+        """ Target3 (IDD) """
+        idd_loader = torch.utils.data.DataLoader(
+            IDDDataSet(args.data_dir_idd, args.data_list_idd,
+                       crop_size=input_size, ignore_label=args.ignore_label,
+                       set=args.set, num_classes=args.num_classes),
+            batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+
+        hist = np.zeros((args.num_classes, args.num_classes))
+        for i, data in enumerate(idd_loader):
+            images_val, labels, _ = data
+            images_val, labels = images_val.to(device), labels.to(device)
+            _, _, _, pred = model(images_val, input_size)
+            # pred = nn.Upsample(size=(1080, 1920), mode='bilinear', align_corners=True)(pred)
+            # labels = labels.unsqueeze(1)
+            # labels = nn.Upsample(size=(1080, 1920), mode='nearest')(labels)
+            _, pred = pred.max(dim=1)
+
+            labels = labels.cpu().numpy()
+            pred = pred.cpu().detach().numpy()
+
+            hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
+        mIoUs = per_class_iu(hist)
+        if args.mIoUs_per_class:
+            for ind_class in range(args.num_classes):
+                print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
+        print('===> mIoU (IDD): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
+        print('=' * 50)
+
 
 if __name__ == '__main__':
     main()
