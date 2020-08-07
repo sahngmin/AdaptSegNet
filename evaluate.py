@@ -148,7 +148,7 @@ def main():
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
         saved_state_dict = torch.load('./snapshots/' + str((files + 1) * args.save_pred_every) + '.pth')
-        # saved_state_dict = torch.load('./snapshots/' + '20000.pth')
+        # saved_state_dict = torch.load('./snapshots/' + '30000.pth')
         model.load_state_dict(saved_state_dict)
 
         device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')

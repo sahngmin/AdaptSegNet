@@ -1,11 +1,11 @@
 import argparse
 
-SOURCE_ONLY = False
+SOURCE_ONLY = True
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 100000  # early stopping
-NUM_STEPS = 100000
+SAVE_PRED_EVERY = 3000
+NUM_STEPS_STOP = 30000  # early stopping
+NUM_STEPS = 30000
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 TARGET = 'CityScapes'  # 'CityScapes' or 'IDD'
@@ -20,14 +20,14 @@ LEARNING_RATE_D = 1e-4
 
 GAN = 'LS'  # 'Vanilla' or 'LS' or 'Hinge'
 
-LAMBDA_ADV = 0.0015
+LAMBDA_ADV = 0.001
 LAMBDA_DISTILL = 0.2
 
 RANDOM_SEED = 1338
 
 IGNORE_LABEL = 255
 
-BATCH_SIZE = 8
+BATCH_SIZE = 6
 NUM_WORKERS = 4
 
 if SOURCE == 'GTA5':

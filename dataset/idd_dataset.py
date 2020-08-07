@@ -64,6 +64,7 @@ class IDDDataSet(data.Dataset):
         image = image[:, :, ::-1]  # change to BGR
         image = image / 255.0
         image = image.transpose((2, 0, 1))
+        image = image.astype(np.float32)
 
         return image, label_copy, name
 
