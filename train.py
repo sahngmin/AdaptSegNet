@@ -14,13 +14,8 @@ from dataset.gta5_dataset import GTA5DataSet
 from dataset.synthia_dataset import SYNTHIADataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.idd_dataset import IDDDataSet
-<<<<<<< HEAD
 from tensorboardX import SummaryWriter
 
-
-=======
-
->>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 PRE_TRAINED_SEG = ''
 # PRE_TRAINED_SEG = './snapshots/GTA5_CityScapes/30000.pth'
 
