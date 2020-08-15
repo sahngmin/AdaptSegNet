@@ -6,7 +6,10 @@ import torch
 import numpy as np
 from torch.autograd import Variable
 <<<<<<< HEAD
+<<<<<<< HEAD
 from model.warper import Warper, ConvWarper
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 =======
 >>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 from collections import OrderedDict
@@ -203,6 +206,7 @@ class DM(nn.Module):
         out1 = self.module_list[0](x)
         out2 = self.module_list[1](x)
 <<<<<<< HEAD
+<<<<<<< HEAD
         # out2 = F.interpolate(self.module_list[1](x), size=out1.size()[2:], mode='bilinear', align_corners=True)
         return out1, out2
 
@@ -213,6 +217,14 @@ class ResNet_DM(nn.Module):
         self.warper = args.warper
         self.multi_gpu = args.multi_gpu
         self.num_dataset = args.num_dataset
+=======
+        return out1, out2
+
+class ResNet_DM(nn.Module):
+    def __init__(self, block, layers, num_classes, args=None):
+        super(ResNet_DM, self).__init__()
+        self.num_target = args.num_target
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 =======
         return out1, out2
 
@@ -242,12 +254,18 @@ class ResNet_DM(nn.Module):
         self.layer6 = self._make_pred_layer(Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], num_classes)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
         if args.memory:
             for num_dataset in range(len_dataset):
                 DM_name = 'DM' + str(num_dataset + 1)
                 # setattr(self, DM_name, self._make_pred_layer(DM, 3072, [6, 12], [6, 12], num_classes))
                 setattr(self, DM_name, DM(2048, num_classes))
+=======
+        for num in range(self.num_target):
+            DM_name = 'DM' + str(num + 1)
+            setattr(self, DM_name, DM(2048, num_classes))  # without skip connection
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 =======
         for num in range(self.num_target):
             DM_name = 'DM' + str(num + 1)
@@ -284,8 +302,12 @@ class ResNet_DM(nn.Module):
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def forward(self, input, label=None):
         output_both_warped, output_ori_warped, output_both, output_ori = None, None, None, None
+=======
+    def forward(self, image, input_size, map=None):
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 =======
     def forward(self, image, input_size, map=None):
 >>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
@@ -300,6 +322,7 @@ class ResNet_DM(nn.Module):
         x1 = self.layer4(x)
 
         x2 = self.layer6(x1[0])
+<<<<<<< HEAD
 <<<<<<< HEAD
         output_ori = nn.Upsample(size=(self.input_size[1], self.input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
         if self.memory:
@@ -318,10 +341,13 @@ class ResNet_DM(nn.Module):
             new_x += F.interpolate(x3_2, size=new_x.size()[2:], mode='bilinear', align_corners=True)
             output_both = nn.Upsample(size=(self.input_size[1], self.input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 =======
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
         output_ori = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)  # ResNet + ASPP
 
         DM_name = 'DM' + str(self.num_target)
         # DM_name = 'DM1'
+<<<<<<< HEAD
 
         x3 = x1[0]  # nonlinear(0)/linear(1) output
 >>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
@@ -335,6 +361,20 @@ class ResNet_DM(nn.Module):
                  x3_2.view(x2.shape[0], -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
         output = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
 
+=======
+
+        x3 = x1[0]  # nonlinear(0)/linear(1) output
+
+        x3_1, x3_2 = getattr(self, DM_name)(x3)
+        new_x = x2 + x2.view(x2.shape[0], self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
+                ((x3_1 - x3_1.view(x2.shape[0], self.num_classes, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
+                 x3_1.view(x2.shape[0], self.num_classes, -1).std(dim=2, keepdim=True).unsqueeze(3))
+        new_x += x2.view(x2.shape[0], self.num_classes, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
+                 (x3_2 - x3_2.view(x2.shape[0], -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
+                 x3_2.view(x2.shape[0], -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
+        output = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(new_x)  # ResNet + (ASPP+DM)
+
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
         return output, output_ori
 
 
@@ -396,6 +436,7 @@ class ResNet_DM(nn.Module):
         else:
             optim_parameters = [{'params': self.ResNet_params(), 'lr': args.learning_rate},
 <<<<<<< HEAD
+<<<<<<< HEAD
                                 {'params': self.ASPP_params(), 'lr': args.learning_rate}]
 
         if self.memory:
@@ -407,6 +448,8 @@ class ResNet_DM(nn.Module):
 def Deeplab_DM(args=None, device='cpu'):
     model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args, len_dataset=args.num_dataset, device=device)
 =======
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
                                 {'params': self.ASPP_params(), 'lr': args.learning_rate},
                                 {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}]
         return optim_parameters
@@ -414,6 +457,9 @@ def Deeplab_DM(args=None, device='cpu'):
 
 def Deeplab_DM(args=None):
     model = ResNet_DM(Bottleneck, [3, 4, 23, 3], num_classes=args.num_classes, args=args)
+<<<<<<< HEAD
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
+=======
 >>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
     return model
 

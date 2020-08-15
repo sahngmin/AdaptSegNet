@@ -159,7 +159,5 @@ ACE/pretrained_snapshot/
 ACE/snapshots/
 ACE/memory/
 
-result/
 
 ./DeepLab_resnet_pretrained_init-f81d91e8.pth
-

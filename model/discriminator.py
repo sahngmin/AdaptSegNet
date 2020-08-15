@@ -1,8 +1,11 @@
 import torch.nn as nn
 <<<<<<< HEAD
+<<<<<<< HEAD
 import torch.nn.functional as F
 import torch
 =======
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 import torch
 
 >>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
@@ -38,6 +41,7 @@ class FCDiscriminator(nn.Module):
 
 		return x
 
+<<<<<<< HEAD
 
 class SpectralConvolution(nn.Module):
 	def __init__(self, in_ch, out_ch, kernel_size, stride, padding, bias=True):
@@ -106,6 +110,8 @@ class SpectralDiscriminator(nn.Module):
 
 		return x
 
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 class SpectralConvolution(nn.Module):
 	def __init__(self, in_ch, out_ch, kernel_size, stride, padding, bias=True):
 		super(SpectralConvolution, self).__init__()

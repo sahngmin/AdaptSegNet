@@ -1,6 +1,9 @@
 import argparse
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 SOURCE_ONLY = True
 FROM_SCRATCH = True
 
@@ -33,8 +36,11 @@ IGNORE_LABEL = 255
 BATCH_SIZE = 1
 NUM_WORKERS = 1
 
+<<<<<<< HEAD
 LOG_DIR = 'logs'
 
+=======
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 if SOURCE == 'GTA5':
     # DATA_DIRECTORY = '/work/GTA5'
     DATA_DIRECTORY = './data/GTA5'
@@ -58,9 +64,14 @@ elif TARGET == 'IDD':
     DATA_DIRECTORY_TARGET = './data/IDD'
     DATA_LIST_PATH_TARGET = './dataset/idd_list/train.txt'
     NUM_TARGET = 2
+<<<<<<< HEAD
 
 INPUT_SIZE_TARGET = '1024,512'
 
+=======
+INPUT_SIZE_TARGET = '1024,512'
+
+>>>>>>> 315a7263ebcc5b7a30c5883cb6be9b56d551ef67
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
 SNAPSHOT_DIR = './snapshots'
@@ -139,6 +150,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--tensorboard", action='store_true', help="choose whether to use tensorboard.", default=True)
         self.parser.add_argument("--log-dir", type=str, default=LOG_DIR,
                             help="Path to the directory of log.")
+
         self.parser.add_argument("--set", type=str, default=SET,
                             help="choose adaptation set.")
         self.parser.add_argument("--gan", type=str, default=GAN,
