@@ -1,0 +1,10 @@
+#! /bin/bash
+
+
+for name in IDD_vanilla_01 IDD_vanilla_007
+do
+    echo $name | tee -a result/lambda_01007.txt
+    CUDA_VISIBLE_DEVICES=3 python evaluate.py --dir-name=$name| tee -a result/lambda_01007.txt
+done
+
+

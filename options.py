@@ -1,25 +1,18 @@
 import argparse
 
-SOURCE_ONLY = False
-MEMORY = False
-WARPER = False
-SPADE_WARPER = False
+
+SOURCE_ONLY = True
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 3000
-NUM_STEPS_STOP = 30000 # early stopping
-NUM_STEPS = 40000
+SAVE_PRED_EVERY = 5000
+NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS = 200000
 
-dataset_list = ['GTA5', 'CityScapes']
-TARGET = dataset_list[-1]
+SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
+TARGET = 'IDD'  # 'CityScapes' or 'IDD'
 SET = 'train'
-NUM_DATASET = len(dataset_list)
 
-SAVE_DIR_NAME = 'single_alignment_hinge_cityscap_new_002_disc4'
-SEGNET_NAME = 'checkpoint'
-WARPER_NAME = 'SPADE'
-
-CHECKPOINT = ''
+DIR_NAME = 'source_only_001'
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -28,41 +21,49 @@ POWER = 0.9
 
 LEARNING_RATE_D = 1e-4
 
-GAN = 'Hinge'
+GAN = 'Vanilla'  # 'Vanilla' or 'LS' or 'Hinge'
 
-LAMBDA_ADV_TARGET = [0.002, 0.002]
-LAMBDA_DISTILLATION = 0.1
-UPDATE_DISC = 4
+LAMBDA_ADV = 0.001
+LAMBDA_DISTILL = 0.2
 
 RANDOM_SEED = 1338
 
-MODEL = 'DeepLab'
-BATCH_SIZE = 8
-ITER_SIZE = 1
-NUM_WORKERS = 1
-# DATA_DIRECTORY = '/home/joonhkim/UDA/datasets/GTA5'
-# DATA_DIRECTORY = '/work/GTA5'
-DATA_DIRECTORY = './data/GTA5'
-
-# DATA_DIRECTORY = '/home/aiwc/Datasets/GTA5'
-DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
-INPUT_SIZE = '512,256'
-# DATA_DIRECTORY_TARGET = '/home/joonhkim/UDA/datasets/CityScapes'
-# DATA_DIRECTORY_TARGET = '/work/CityScapes'
-DATA_DIRECTORY_TARGET = './data/CityScapes'
-DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
-INPUT_SIZE_TARGET = '512,256'
 
-NUM_CLASSES = 13
+BATCH_SIZE = 1
+NUM_WORKERS = 1
+
+LOG_DIR = 'logs'
+
+if SOURCE == 'GTA5':
+    # DATA_DIRECTORY = '/work/GTA5'
+    DATA_DIRECTORY = './data/GTA5'
+    DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+    NUM_CLASSES = 18
+elif SOURCE == 'SYNTHIA':
+    # DATA_DIRECTORY = '/work/SYNTHIA'
+    DATA_DIRECTORY = './data/SYNTHIA'
+    DATA_LIST_PATH = './dataset/synthia_list/train.txt'
+    NUM_CLASSES = 13
+
+INPUT_SIZE = '1024, 512'
+
+if TARGET == 'CityScapes':
+    # DATA_DIRECTORY_TARGET = '/work/CityScapes'
+    DATA_DIRECTORY_TARGET = './data/CityScapes'
+    DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
+    NUM_TARGET = 1
+elif TARGET == 'IDD':
+    # DATA_DIRECTORY_TARGET = '/work/IDD'
+    DATA_DIRECTORY_TARGET = './data/IDD'
+    DATA_LIST_PATH_TARGET = './dataset/idd_list/train.txt'
+    NUM_TARGET = 2
+
+INPUT_SIZE_TARGET = '1024,512'
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-# RESTORE_FROM_RESNET = 'DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
-SAVE_NUM_IMAGES = 2
-
-SNAPSHOT_DIR = './snapshots/'
-LOG_DIR = './log'
+SNAPSHOT_DIR = './snapshots'
 
 
 class BaseOptions:
@@ -83,14 +84,11 @@ class TrainOptions(BaseOptions):
         super(TrainOptions, self).__init__()
         # Training options
 
-        self.parser.add_argument("--model", type=str, default=MODEL,
-                            help="available options : DeepLab")
-        self.parser.add_argument("--target", type=str, default=TARGET,
-                            help="available options : CityScapes, Synthia")
+        self.parser.add_argument("--source", type=str, default=SOURCE)
+        self.parser.add_argument("--target", type=str, default=TARGET)
+        self.parser.add_argument("--num-target", type=int, default=NUM_TARGET)
         self.parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                             help="Number of images sent to the network in one step.")
-        self.parser.add_argument("--iter-size", type=int, default=ITER_SIZE,
-                            help="Accumulate gradients for ITER_SIZE iterations.")
         self.parser.add_argument("--num-workers", type=int, default=NUM_WORKERS,
                             help="number of workers for multithread dataloading.")
         self.parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
@@ -113,12 +111,11 @@ class TrainOptions(BaseOptions):
                             help="Base learning rate for training with polynomial decay.")
         self.parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
                             help="Base learning rate for discriminator.")
-        self.parser.add_argument("--lambda-adv-target", type=list, default=LAMBDA_ADV_TARGET,
+        self.parser.add_argument("--lambda-adv", type=float, default=LAMBDA_ADV,
                             help="lambda_adv for adversarial training.")
-        self.parser.add_argument("--lambda-distillation", type=float, default=LAMBDA_DISTILLATION)
+        self.parser.add_argument("--lambda-distill", type=float, default=LAMBDA_DISTILL,
+                                 help="lambda_distill for knowledge distillation.")
         self.parser.add_argument("--momentum", type=float, default=MOMENTUM,
-                            help="Momentum component of the optimiser.")
-        self.parser.add_argument("--not-restore-last", action="store_true",
                             help="Whether to not restore last (FC) layers.")
         self.parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
                             help="Number of classes to predict (including background).")
@@ -128,16 +125,10 @@ class TrainOptions(BaseOptions):
                             help="Number of training steps for early stopping.")
         self.parser.add_argument("--power", type=float, default=POWER,
                             help="Decay parameter to compute the learning rate.")
-        self.parser.add_argument("--random-mirror", action="store_true",
-                            help="Whether to randomly mirror the inputs during the training.")
-        self.parser.add_argument("--random-scale", action="store_true",
-                            help="Whether to randomly scale the inputs during the training.")
         self.parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                             help="Random seed to have reproducible results.")
         self.parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
                             help="Where restore model parameters from.")
-        self.parser.add_argument("--save-num-images", type=int, default=SAVE_NUM_IMAGES,
-                            help="How many images to save.")
         self.parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
                             help="Save summaries and checkpoint every often.")
         self.parser.add_argument("--snapshot-dir", type=str, default=SNAPSHOT_DIR,
@@ -153,25 +144,6 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--gan", type=str, default=GAN,
                             help="choose the GAN objective.")
         self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
-        self.parser.add_argument("--memory", action='store_true', default=MEMORY)
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
-        self.parser.add_argument("--num-dataset", type=int, default=NUM_DATASET, help="Which target dataset?")
-        self.parser.add_argument("--input_size", default=INPUT_SIZE)
-        self.parser.add_argument("--update_disc", default=UPDATE_DISC)
-        self.parser.add_argument("--checkpoint", default=CHECKPOINT)
 
-        self.parser.add_argument("--multi_gpu", default=False)
-
-        self.parser.add_argument("--dir_name", default=SAVE_DIR_NAME)
-        self.parser.add_argument("--segnet_name", default=SEGNET_NAME)
-
-        # SPADE options
-        self.parser.add_argument('--norm_G', type=str, default='spectralspadesyncbatch3x3',
-                            help='instance normalization or batch normalization')
-        self.parser.add_argument('--semantic_nc', type=int, default=NUM_CLASSES, help='# of input label classes without unknown class. If you have unknown class as class label, specify --contain_dopntcare_label.')
-        self.parser.add_argument('--ngf', type=int, default=4, help='# of gen filters in first conv layer')
-        self.parser.add_argument('--num_upsampling_layers',
-                            choices=('normal', 'more', 'most'), default='normal',
-                            help="If 'more', adds upsampling layer between the two middle resnet blocks. If 'most', also add one more upsampling + resnet layer at the end of the generator")
-
-
+        self.parser.add_argument("--dir-name", type=str, default=DIR_NAME)

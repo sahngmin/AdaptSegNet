@@ -3,9 +3,8 @@ import random
 from shutil import copyfile
 
 write_new_ori = False
-data_path = "../dataset/GTA5"
-sub_dir = "images"
-
+data_path = "/work/SYNTHIA"
+sub_dir = "RGB"
 
 if write_new_ori:
     total_files = sorted([f for dp, dn, fn in os.walk(os.path.expanduser(os.path.join(data_path, sub_dir))) for f in fn])
