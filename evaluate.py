@@ -11,29 +11,33 @@ from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.idd_dataset import IDDDataSet
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
-DIR_NAME = ''
+DIR_NAME = 'IDD_vanilla_005'
 
 GTA5 = True
-SYNTHIA = True
+SYNTHIA = False
 CityScapes = True
 IDD = True
 PER_CLASS = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 50000
+NUM_STEPS_STOP = 150000
 
-BATCH_SIZE = 6
+BATCH_SIZE = 1
 
-DATA_DIRECTORY_GTA5 = '/work/GTA5'
+# DATA_DIRECTORY_GTA5 = '/work/GTA5'
+DATA_DIRECTORY_GTA5 = './data/GTA5'
 DATA_LIST_PATH_GTA5 = './dataset/gta5_list/val.txt'
 
-DATA_DIRECTORY_SYNTHIA = '/work/SYNTHIA'
+# DATA_DIRECTORY_SYNTHIA = '/work/SYNTHIA'
+DATA_DIRECTORY_SYNTHIA = './data/SYNTHIA'
 DATA_LIST_PATH_SYNTHIA = './dataset/synthia_list/val.txt'
 
-DATA_DIRECTORY_CityScapes = '/work/CityScapes'
+# DATA_DIRECTORY_CityScapes = '/work/CityScapes'
+DATA_DIRECTORY_CityScapes = './data/CityScapes'
 DATA_LIST_PATH_CityScapes = './dataset/cityscapes_list/val.txt'
 
-DATA_DIRECTORY_IDD = '/work/IDD_Segmentation'
+# DATA_DIRECTORY_IDD = '/work/IDD_Segmentation'
+DATA_DIRECTORY_IDD = './data/IDD'
 DATA_LIST_PATH_IDD = './dataset/idd_list/val.txt'
 
 IGNORE_LABEL = 255
@@ -102,11 +106,11 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
+    torch.backends.cudnn.enabled = True  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
-    input_size = (512, 256)
+    input_size = (1024, 512)
 
     if args.num_classes == 13:
         name_classes = np.asarray(["road",
@@ -161,7 +165,7 @@ def main():
                 GTA5DataSet(args.data_dir_gta5, args.data_list_gta5,
                             crop_size=input_size, ignore_label=args.ignore_label,
                             set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(gta5_loader):
@@ -189,7 +193,7 @@ def main():
                 SYNTHIADataSet(args.data_dir_synthia, args.data_list_synthia,
                                crop_size=input_size, ignore_label=args.ignore_label,
                                set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(synthia_loader):
@@ -217,7 +221,7 @@ def main():
                 cityscapesDataSet(args.data_dir_cityscapes, args.data_list_cityscapes,
                                   crop_size=input_size, ignore_label=args.ignore_label,
                                   set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(cityscapes_loader):
