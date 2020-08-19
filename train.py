@@ -98,6 +98,7 @@ def main():
             model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
         elif args.gan == 'Hinge':
             model_D = SpectralDiscriminator(num_classes=args.num_classes).to(device)
+            # model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
         else:
             raise NotImplementedError('Unavailable GAN option')
 
