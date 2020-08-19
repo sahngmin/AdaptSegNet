@@ -2,16 +2,16 @@ import argparse
 
 SOURCE_ONLY = False
 FROM_SCRATCH = True
-NEW_HINGE = False
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000  # early stopping
-NUM_STEPS = 200000
 
-SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
-TARGET = 'IDD'  # 'CityScapes' or 'IDD'
+SAVE_PRED_EVERY = 2000
+NUM_STEPS_STOP = 30000  # early stopping
+NUM_STEPS = 50000
+
 SET = 'train'
 
-DIR_NAME = 'IDD_hinge'
+DIR_NAME = 'MNIST_0_'
+
+target_degrees = [30, 60, 90, 120, 150, 180]
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -34,33 +34,6 @@ NUM_WORKERS = 4
 
 LOG_DIR = 'logs'
 
-if SOURCE == 'GTA5':
-    # DATA_DIRECTORY = '/work/GTA5'
-    DATA_DIRECTORY = './data/GTA5'
-    DATA_LIST_PATH = './dataset/gta5_list/train.txt'
-    NUM_CLASSES = 18
-elif SOURCE == 'SYNTHIA':
-    # DATA_DIRECTORY = '/work/SYNTHIA'
-    DATA_DIRECTORY = './data/SYNTHIA'
-    DATA_LIST_PATH = './dataset/synthia_list/train.txt'
-    NUM_CLASSES = 13
-
-INPUT_SIZE = '1024, 512'
-
-if TARGET == 'CityScapes':
-    # DATA_DIRECTORY_TARGET = '/work/CityScapes'
-    DATA_DIRECTORY_TARGET = './data/CityScapes'
-    DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
-    NUM_TARGET = 1
-elif TARGET == 'IDD':
-    # DATA_DIRECTORY_TARGET = '/work/IDD'
-    DATA_DIRECTORY_TARGET = './data/IDD'
-    DATA_LIST_PATH_TARGET = './dataset/idd_list/train.txt'
-    NUM_TARGET = 2
-
-INPUT_SIZE_TARGET = '1024,512'
-
-RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
 SNAPSHOT_DIR = './snapshots'
 
@@ -83,27 +56,14 @@ class TrainOptions(BaseOptions):
         super(TrainOptions, self).__init__()
         # Training options
 
-        self.parser.add_argument("--source", type=str, default=SOURCE)
-        self.parser.add_argument("--target", type=str, default=TARGET)
-        self.parser.add_argument("--num-target", type=int, default=NUM_TARGET)
         self.parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                             help="Number of images sent to the network in one step.")
         self.parser.add_argument("--num-workers", type=int, default=NUM_WORKERS,
                             help="number of workers for multithread dataloading.")
-        self.parser.add_argument("--data-dir", type=str, default=DATA_DIRECTORY,
-                            help="Path to the directory containing the source dataset.")
-        self.parser.add_argument("--data-list", type=str, default=DATA_LIST_PATH,
-                            help="Path to the file listing the images in the source dataset.")
+
         self.parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
                             help="The index of the label to ignore during the training.")
-        self.parser.add_argument("--input-size", type=str, default=INPUT_SIZE,
-                            help="Comma-separated string with height and width of source images.")
-        self.parser.add_argument("--data-dir-target", type=str, default=DATA_DIRECTORY_TARGET,
-                            help="Path to the directory containing the target dataset.")
-        self.parser.add_argument("--data-list-target", type=str, default=DATA_LIST_PATH_TARGET,
-                            help="Path to the file listing the images in the target dataset.")
-        self.parser.add_argument("--input-size-target", type=str, default=INPUT_SIZE_TARGET,
-                            help="Comma-separated string with height and width of target images.")
+
         self.parser.add_argument("--is-training", action="store_true",
                             help="Whether to updates the running means and variances during the training.")
         self.parser.add_argument("--learning-rate", type=float, default=LEARNING_RATE,
@@ -116,8 +76,7 @@ class TrainOptions(BaseOptions):
                                  help="lambda_distill for knowledge distillation.")
         self.parser.add_argument("--momentum", type=float, default=MOMENTUM,
                             help="Whether to not restore last (FC) layers.")
-        self.parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
-                            help="Number of classes to predict (including background).")
+
         self.parser.add_argument("--num-steps", type=int, default=NUM_STEPS,
                             help="Number of training steps.")
         self.parser.add_argument("--num-steps-stop", type=int, default=NUM_STEPS_STOP,
@@ -126,8 +85,7 @@ class TrainOptions(BaseOptions):
                             help="Decay parameter to compute the learning rate.")
         self.parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                             help="Random seed to have reproducible results.")
-        self.parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
-                            help="Where restore model parameters from.")
+
         self.parser.add_argument("--save-pred-every", type=int, default=SAVE_PRED_EVERY,
                             help="Save summaries and checkpoint every often.")
         self.parser.add_argument("--snapshot-dir", type=str, default=SNAPSHOT_DIR,
@@ -143,9 +101,11 @@ class TrainOptions(BaseOptions):
                             help="choose adaptation set.")
         self.parser.add_argument("--gan", type=str, default=GAN,
                             help="choose the GAN objective.")
-        self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
+
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
+        self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
 
         self.parser.add_argument("--dir-name", type=str, default=DIR_NAME)
-        self.parser.add_argument("--new-hinge", type=str, default=NEW_HINGE)
+        self.parser.add_argument("--degree", type=int, default=30)
+        self.parser.add_argument("--target_degrees", default=target_degrees)
 

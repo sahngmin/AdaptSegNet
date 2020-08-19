@@ -204,7 +204,8 @@ def main():
         loss = loss_seg
         loss_seg_value += loss_seg.item()
 
-        loss.backward()
+        if not args.new_hinge:
+            loss.backward()
 
         if not args.source_only:
             _, batch = targetloader_iter.__next__()
@@ -214,15 +215,24 @@ def main():
             pred_target = model(images_target, input_size_target)
 
             if args.gan == 'Hinge':
-                loss_adv = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
+                if args.new_hinge:
+                    source_pred = F.softmax(pred, dim=1)
+                else:
+                    source_pred = None
+                loss_adv = adversarial_loss(F.softmax(pred_target, dim=1), real_samples=source_pred, generator=True, new_hinge=args.new_hinge)
             else:
                 D_out = model_D(F.softmax(pred_target, dim=1))
 
                 loss_adv = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
-            loss = args.lambda_adv * loss_adv
+            loss_G = args.lambda_adv * loss_adv
             loss_adv_value += loss_adv.item()
-            loss.backward()
+
+            if args.new_hinge:
+                loss += loss_G
+                loss.backward()
+            else:
+                loss_G.backward()
 
             # train D
 
@@ -234,7 +244,7 @@ def main():
             pred_target = pred_target.detach()
 
             if args.gan == 'Hinge':
-                loss_D = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=False)
+                loss_D = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=False, new_hinge=args.new_hinge)
                 loss_D.backward()
                 loss_D_value += loss_D.item()
             else:
