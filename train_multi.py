@@ -8,7 +8,7 @@ import os
 import os.path as osp
 import random
 import copy
-from options import TrainOptions
+from options_multi import TrainOptions
 from model.deeplab_multi import Deeplab_multi
 from model.discriminator import FCDiscriminator, SpectralDiscriminator, Hinge
 from dataset.gta5_dataset import GTA5DataSet
