@@ -50,9 +50,9 @@ class Bottleneck(nn.Module):
             residual = self.downsample(x)
 
         out += residual
-        nonlinear_out = self.relu(out)
+        out = self.relu(out)
 
-        return [nonlinear_out, out]
+        return out
 
 
 class Classifier_Module(nn.Module):
