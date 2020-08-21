@@ -1,7 +1,7 @@
 import argparse
 
-SOURCE_ONLY = False
 FROM_SCRATCH = True
+DM = False
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
@@ -11,7 +11,7 @@ SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 TARGET = 'CityScapes'  # 'CityScapes' or 'IDD'
 SET = 'train'
 
-DIR_NAME = 'AdaptSegNet_Vanilla(SpecX)_concat'
+DIR_NAME = 'AdaptSegNet_Vanilla(SpecX)_multi'
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -20,10 +20,14 @@ POWER = 0.9
 
 LEARNING_RATE_D = 1e-4
 
-GAN = 'Vanilla'  # 'Vanilla' or 'LS' or 'Hinge'
+GAN = 'Vanilla'  # 'Vanilla' or 'LS' or 'Hinge' or 'new_Hinge'
+SPEC = False
 
-LAMBDA_ADV = 0.001
-LAMBDA_DISTILL = 0.2
+LAMBDA_ADV2 = 0.001
+LAMBDA_ADV1 = 0.0002
+LAMBDA_SEG = 0.1
+LAMBDA_DISTILL2 = 0.1
+LAMBDA_DISTILL1 = 0.01
 
 RANDOM_SEED = 1338
 
@@ -51,6 +55,7 @@ elif TARGET == 'IDD':
     DATA_LIST_PATH_TARGET = './dataset/idd_list/train.txt'
     NUM_TARGET = 2
 INPUT_SIZE_TARGET = '1024,512'
+EVAL_TARGET = -1
 
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 
@@ -78,6 +83,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--source", type=str, default=SOURCE)
         self.parser.add_argument("--target", type=str, default=TARGET)
         self.parser.add_argument("--num-target", type=int, default=NUM_TARGET)
+        self.parser.add_argument("--eval-target", type=int, default=EVAL_TARGET)
         self.parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                             help="Number of images sent to the network in one step.")
         self.parser.add_argument("--num-workers", type=int, default=NUM_WORKERS,
@@ -102,9 +108,15 @@ class TrainOptions(BaseOptions):
                             help="Base learning rate for training with polynomial decay.")
         self.parser.add_argument("--learning-rate-D", type=float, default=LEARNING_RATE_D,
                             help="Base learning rate for discriminator.")
-        self.parser.add_argument("--lambda-adv", type=float, default=LAMBDA_ADV,
+        self.parser.add_argument("--lambda-adv1", type=float, default=LAMBDA_ADV1,
                             help="lambda_adv for adversarial training.")
-        self.parser.add_argument("--lambda-distill", type=float, default=LAMBDA_DISTILL,
+        self.parser.add_argument("--lambda-adv2", type=float, default=LAMBDA_ADV2,
+                                 help="lambda_adv for adversarial training.")
+        self.parser.add_argument("--lambda-seg", type=float, default=LAMBDA_SEG,
+                                 help="lambda_adv for adversarial training.")
+        self.parser.add_argument("--lambda-distill1", type=float, default=LAMBDA_DISTILL1,
+                                 help="lambda_distill for knowledge distillation.")
+        self.parser.add_argument("--lambda-distill2", type=float, default=LAMBDA_DISTILL2,
                                  help="lambda_distill for knowledge distillation.")
         self.parser.add_argument("--momentum", type=float, default=MOMENTUM,
                             help="Whether to not restore last (FC) layers.")
@@ -131,6 +143,7 @@ class TrainOptions(BaseOptions):
                             help="choose adaptation set.")
         self.parser.add_argument("--gan", type=str, default=GAN,
                             help="choose the GAN objective.")
-        self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
+        self.parser.add_argument("--spec", action='store_true', default=SPEC)
         self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
+        self.parser.add_argument("--dm", action='store_true', default=DM)
         self.parser.add_argument("--dir-name", type=str, default=DIR_NAME)

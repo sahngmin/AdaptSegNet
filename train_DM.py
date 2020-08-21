@@ -28,8 +28,8 @@ def lr_power(base_lr, iter, power, interval):
     return base_lr * pow(power, int(iter / interval))
 
 def adjust_learning_rate(optimizer, i_iter, args):
-    # lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
-    lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
+    lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
+    # lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) > 1:
         if args.from_scratch:
@@ -41,8 +41,8 @@ def adjust_learning_rate(optimizer, i_iter, args):
                 optimizer.param_groups[i]['lr'] = lr * 10
 
 def adjust_learning_rate_D(optimizer, i_iter):
-    # lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
-    lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
+    lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
+    # lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
 
 def distillation_loss(pred_origin, old_outputs):
@@ -57,7 +57,7 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
+    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
@@ -68,7 +68,7 @@ def main():
     w, h = map(int, args.input_size_target.split(','))
     input_size_target = (w, h)
 
-    # cudnn.enabled = True
+    cudnn.enabled = True
 
     # Create network
     model = Deeplab_DM(args=args)
@@ -102,7 +102,7 @@ def main():
     model.train()
     model.to(device)
 
-    cudnn.benchmark = False  # False for reproducibility
+    cudnn.benchmark = True  # False for reproducibility
     """
     benchmark mode is good whenever your input sizes for your network do not vary. This way, cudnn will look for 
     the optimal set of algorithms for that particular configuration (which takes some time) for your hardware. 

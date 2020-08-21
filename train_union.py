@@ -122,25 +122,22 @@ def main():
     trainloader_iter = enumerate(trainloader)
 
     if not args.source_only:
-        if args.target == 'CityScapes':
-            targetloader = data.DataLoader(cityscapesDataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             ignore_label=args.ignore_label,
-                                                             set=args.set, num_classes=args.num_classes),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
-        elif args.target == 'IDD':
-            targetloader = data.DataLoader(IDDDataSet(args.data_dir_target, args.data_list_target,
-                                                             max_iters=args.num_steps * args.batch_size,
-                                                             crop_size=input_size_target,
-                                                             ignore_label=args.ignore_label,
-                                                             set=args.set, num_classes=args.num_classes),
-                                           batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                           pin_memory=True)
-        else:
-            raise NotImplementedError('Unavailable target domain')
-        targetloader_iter = enumerate(targetloader)
+        targetloader_1 = data.DataLoader(cityscapesDataSet('/work/CityScapes', './dataset/cityscapes_list/train.txt',
+                                                         max_iters=args.num_steps * args.batch_size,
+                                                         crop_size=input_size_target,
+                                                         ignore_label=args.ignore_label,
+                                                         set=args.set, num_classes=args.num_classes),
+                                       batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                       pin_memory=True)
+        targetloader_2 = data.DataLoader(IDDDataSet('/work/IDD_Segmentation', './dataset/idd_list/train.txt',
+                                                         max_iters=args.num_steps * args.batch_size,
+                                                         crop_size=input_size_target,
+                                                         ignore_label=args.ignore_label,
+                                                         set=args.set, num_classes=args.num_classes),
+                                       batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                       pin_memory=True)
+        targetloader_iter_1 = enumerate(targetloader_1)
+        targetloader_iter_2 = enumerate(targetloader_2)
 
     # implement model.optim_parameters(args) to handle different models' lr setting
     optimizer = optim.SGD(model.optim_parameters(args),
@@ -191,8 +188,7 @@ def main():
         images = images.to(device)
         labels = labels.long().to(device)
 
-        # pred = model(images, input_size)
-        pred, feat = model(images, input_size)
+        pred = model(images, input_size)
 
         loss_seg = seg_loss(pred, labels)
         loss = loss_seg
@@ -201,18 +197,19 @@ def main():
         loss.backward()
 
         if not args.source_only:
-            _, batch = targetloader_iter.__next__()
+            if i_iter % 2 == 0:
+                _, batch = targetloader_iter_1.__next__()
+            else:
+                _, batch = targetloader_iter_2.__next__()
             images_target, _, _ = batch
             images_target = images_target.to(device)
 
-            # pred_target = model(images_target, input_size_target)
-            pred_target, feat_target = model(images_target, input_size_target)
+            pred_target = model(images_target, input_size_target)
 
             if args.gan == 'Hinge':
                 loss_adv = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
             else:
-                # D_out = model_D(F.softmax(pred_target, dim=1))
-                D_out = model_D(F.softmax(torch.cat((pred_target, feat_target), dim=1), dim=1))
+                D_out = model_D(F.softmax(pred_target, dim=1))
 
                 loss_adv = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
@@ -228,8 +225,6 @@ def main():
 
             pred = pred.detach()
             pred_target = pred_target.detach()
-            feat = feat.detach()
-            feat_target = feat_target.detach()
 
             if args.gan == 'Hinge':
                 loss_D = adversarial_loss(F.softmax(pred_target, dim=1), F.softmax(pred, dim=1), generator=False)
@@ -237,8 +232,7 @@ def main():
                 loss_D_value += loss_D.item()
             else:
                 # train with source
-                # D_out = model_D(F.softmax(pred, dim=1))
-                D_out = model_D(F.softmax(torch.cat((pred, feat), dim=1), dim=1))
+                D_out = model_D(F.softmax(pred, dim=1))
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                 loss_D = loss_D / 2
@@ -247,8 +241,7 @@ def main():
                 loss_D_value += loss_D.item()
 
                 # train with target
-                # D_out = model_D(F.softmax(pred_target, dim=1))
-                D_out = model_D(F.softmax(torch.cat((pred_target, feat_target), dim=1), dim=1))
+                D_out = model_D(F.softmax(pred_target, dim=1))
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
                 loss_D = loss_D / 2

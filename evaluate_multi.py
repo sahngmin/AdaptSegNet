@@ -4,14 +4,17 @@ import random
 
 import torch
 from torch.utils import data
-from model.deeplab import Deeplab
+from model.deeplab_multi import Deeplab_multi
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.synthia_dataset import SYNTHIADataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 from dataset.idd_dataset import IDDDataSet
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
-DIR_NAME = 'AdaptSegNet_Vanilla(SpecX)_concat'
+NUM_TARGET = 1
+EVAL_TARGET = -1
+DM = False
+DIR_NAME = 'AdaptSegNet_Vanilla(SpecX)_multi'
 
 GTA5 = True
 SYNTHIA = False
@@ -63,6 +66,8 @@ def get_arguments():
     """
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
     parser.add_argument("--source", action='store_true', default=SOURCE)
+    parser.add_argument("--num-target", type=int, default=NUM_TARGET)
+    parser.add_argument("--eval-target", type=int, default=EVAL_TARGET)
     parser.add_argument("--gta5", action='store_true', default=GTA5)
     parser.add_argument("--synthia", action='store_true', default=SYNTHIA)
     parser.add_argument("--cityscapes", action='store_true', default=CityScapes)
@@ -92,6 +97,7 @@ def get_arguments():
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
     parser.add_argument("--dir-name", type=str, default=DIR_NAME)
+    parser.add_argument("--dm", action='store_true', default=DM)
     return parser.parse_args()
 
 
@@ -102,7 +108,6 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
@@ -145,12 +150,15 @@ def main():
         NotImplementedError("Unavailable number of classes")
 
     # Create the model and start the evaluation process
-    model = Deeplab(args=args)
+    model = Deeplab_multi(args=args)
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print('Step: ', (files + 1) * args.save_pred_every)
         saved_state_dict = torch.load('./snapshots/' + args.dir_name + '/' + str((files + 1) * args.save_pred_every) + '.pth')
-        # saved_state_dict = torch.load('./snapshots/' + '30000.pth')
-        model.load_state_dict(saved_state_dict)
+        new_params = model.state_dict().copy()
+        for i in saved_state_dict:
+            if i in new_params.keys():
+                new_params[i] = saved_state_dict[i]
+        model.load_state_dict(new_params)
 
         device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
@@ -167,11 +175,10 @@ def main():
             for i, data in enumerate(gta5_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
+                if args.dm:
+                    pred, _, _, _ = model(images_val, input_size)
+                else:
+                    _, _, pred, _ = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -196,11 +203,10 @@ def main():
             for i, data in enumerate(synthia_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
+                if args.dm:
+                    pred, _, _, _ = model(images_val, input_size)
+                else:
+                    _, _, pred, _ = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -225,11 +231,10 @@ def main():
             for i, data in enumerate(cityscapes_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
+                if args.dm:
+                    pred, _, _, _ = model(images_val, input_size)
+                else:
+                    _, _, pred, _ = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -254,11 +259,10 @@ def main():
             for i, data in enumerate(idd_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1080, 1920), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1080, 1920), mode='nearest')(labels)
+                if args.dm:
+                    pred, _, _, _ = model(images_val, input_size)
+                else:
+                    _, _, pred, _ = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()

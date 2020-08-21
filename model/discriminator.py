@@ -13,6 +13,12 @@ class FCDiscriminator(nn.Module):
 		self.conv4 = nn.Conv2d(ndf*4, ndf*8, kernel_size=4, stride=2, padding=1)
 		self.classifier = nn.Conv2d(ndf*8, 1, kernel_size=4, stride=2, padding=1)
 
+		# self.conv1 = nn.Conv2d(num_classes * 2, ndf * 2, kernel_size=4, stride=2, padding=1)
+		# self.conv2 = nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
+		# self.conv3 = nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1)
+		# self.conv4 = nn.Conv2d(ndf * 8, ndf * 16, kernel_size=4, stride=2, padding=1)
+		# self.classifier = nn.Conv2d(ndf * 16, 1, kernel_size=4, stride=2, padding=1)
+
 		self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 		self.up_sample = nn.Upsample(scale_factor=32, mode='bilinear')
 		self.sigmoid = nn.Sigmoid()
@@ -85,7 +91,11 @@ class Hinge(nn.Module):
 
 		if generator:
 			if new_Hinge:
-				loss = torch.nn.ReLU()(torch.mean(real_samples) - torch.mean(fake))
+				if label is None:
+					real = self.discriminator(real_samples)
+				else:
+					real = self.discriminator(real_samples, label)
+				loss = torch.nn.ReLU()(torch.mean(real) - torch.mean(fake))
 			else:
 				loss = -torch.mean(fake)
 		else:
