@@ -3,33 +3,35 @@ import argparse
 SOURCE_ONLY = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 2000
-NUM_STEPS_STOP = 30000  # early stopping
-NUM_STEPS = 50000
+SAVE_PRED_EVERY = 500
+NUM_STEPS_STOP = 3000 # early stopping
+NUM_STEPS = 5000
 
 SET = 'train'
 
-DIR_NAME = 'MNIST_0_'
+DIR_NAME = 'mnist_'
+TARGET = 'svhn'
+PRE_TRAINED = ''
 
-target_degrees = [30, 60, 90, 120, 150, 180]
+NUM_TARGET = 1
 
-LEARNING_RATE = 2.5e-4
+LEARNING_RATE = 1e-3
 MOMENTUM = 0.9
 WEIGHT_DECAY = 0.0005
 POWER = 0.9
 
-LEARNING_RATE_D = 1e-4
+LEARNING_RATE_D = 1e-3
 
-GAN = 'Vanilla'  # 'Vanilla' or 'LS' or 'Hinge'
+GAN = 'Hinge'  # 'Vanilla' or 'LS' or 'Hinge'
 
-LAMBDA_ADV = 0.001
+LAMBDA_ADV = 1.5
 LAMBDA_DISTILL = 0.2
 
 RANDOM_SEED = 1338
 
 IGNORE_LABEL = 255
 
-BATCH_SIZE = 2
+BATCH_SIZE = 8
 NUM_WORKERS = 4
 
 LOG_DIR = 'logs'
@@ -106,6 +108,12 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
 
         self.parser.add_argument("--dir-name", type=str, default=DIR_NAME)
-        self.parser.add_argument("--degree", type=int, default=30)
-        self.parser.add_argument("--target_degrees", default=target_degrees)
+
+        self.parser.add_argument("--pre-trained", type=str, default=PRE_TRAINED)
+
+        self.parser.add_argument("--target", type=str, default=TARGET)
+
+        self.parser.add_argument("--case", type=int, default=0)
+
+
 

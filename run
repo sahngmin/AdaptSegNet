@@ -1,10 +1,14 @@
 #! /bin/bash
 
-
-for name in IDD_vanilla_01 IDD_vanilla_007
+for case in 1 2 3 4
 do
-    echo $name | tee -a result/lambda_01007.txt
-    CUDA_VISIBLE_DEVICES=3 python evaluate.py --dir-name=$name| tee -a result/lambda_01007.txt
+    echo $case | tee -a result/train/continual_mnist.txt
+    python train_mnist.py --case=$case| tee -a result/train/continual_mnist.txt
 done
 
+for case in 1 2 3 4
+do
+    echo $case | tee -a result/eval/eval_continual_DM.txt
+    python evaluate_mnist.py --case=$case --lambda-adv=$lambda --gan=$gan | tee -a result/eval/eval_continual_DM.txt
+done
 

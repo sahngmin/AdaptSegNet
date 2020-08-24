@@ -85,7 +85,7 @@ class Hinge(nn.Module):
 
 		if generator:
 			if new_hinge:
-				loss = torch.nn.ReLU()(torch.mean(real_samples) - torch.mean(fake))
+				loss = torch.nn.ReLU()(torch.mean(self.discriminator(real_samples)) - torch.mean(fake))
 			else:
 				loss = -torch.mean(fake)
 		else:

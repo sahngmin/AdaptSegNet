@@ -1,0 +1,10 @@
+#! /bin/bash
+
+
+for case in 1 2 3 4
+do
+    echo $case | tee -a result/eval_continual_mnist.txt
+    python evaluate_mnist.py --case=$case| tee -a result/eval_continual_mnist.txt
+done
+
+

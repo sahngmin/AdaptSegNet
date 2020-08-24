@@ -4,45 +4,25 @@ import random
 
 import torch
 from torch.utils import data
-from model.deeplab_DM import Deeplab_DM
-from dataset.gta5_dataset import GTA5DataSet
-from dataset.synthia_dataset import SYNTHIADataSet
-from dataset.cityscapes_dataset import cityscapesDataSet
-from dataset.idd_dataset import IDDDataSet
+from model.MNIST_model import AlexNet_DM, AlexNet_Source
+from data.DigitFive.datasets.dataset_read import dataset_read
 
-SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
-NUM_TARGET = 1
-DIR_NAME = ''
 
-GTA5 = True
-SYNTHIA = True
-CityScapes = True
-IDD = True
-PER_CLASS = True
+DIR_NAME = 'mnist_'
+TARGET = 'svhn'
 
-SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 50000
+MNIST = True
+USPS = True
+SYN = True
+MNISTM = True
+SVHN = True
 
-BATCH_SIZE = 6
+SAVE_PRED_EVERY = 500
+NUM_STEPS_STOP = 3000
 
-DATA_DIRECTORY_GTA5 = '/work/GTA5'
-DATA_LIST_PATH_GTA5 = './dataset/gta5_list/val.txt'
-
-DATA_DIRECTORY_SYNTHIA = '/work/SYNTHIA'
-DATA_LIST_PATH_SYNTHIA = './dataset/synthia_list/val.txt'
-
-DATA_DIRECTORY_CityScapes = '/work/CityScapes'
-DATA_LIST_PATH_CityScapes = './dataset/cityscapes_list/val.txt'
-
-DATA_DIRECTORY_IDD = '/work/IDD_Segmentation'
-DATA_LIST_PATH_IDD = './dataset/idd_list/val.txt'
+BATCH_SIZE = 16
 
 IGNORE_LABEL = 255
-
-if SOURCE == 'GTA5':
-    NUM_CLASSES = 18
-elif SOURCE == 'SYNTHIA':
-    NUM_CLASSES = 13
 
 SET = 'val'
 
@@ -63,25 +43,13 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
-    parser.add_argument("--source", action='store_true', default=SOURCE)
-    parser.add_argument("--num-target", type=int, default=NUM_TARGET)
-    parser.add_argument("--gta5", action='store_true', default=GTA5)
-    parser.add_argument("--synthia", action='store_true', default=SYNTHIA)
-    parser.add_argument("--cityscapes", action='store_true', default=CityScapes)
-    parser.add_argument("--idd", action='store_true', default=IDD)
-    parser.add_argument("--mIoUs-per-class", action='store_true', default=PER_CLASS)
-    parser.add_argument("--data-dir-gta5", type=str, default=DATA_DIRECTORY_GTA5)
-    parser.add_argument("--data-list-gta5", type=str, default=DATA_LIST_PATH_GTA5)
-    parser.add_argument("--data-dir-synthia", type=str, default=DATA_DIRECTORY_SYNTHIA)
-    parser.add_argument("--data-list-synthia", type=str, default=DATA_LIST_PATH_SYNTHIA)
-    parser.add_argument("--data-dir-cityscapes", type=str, default=DATA_DIRECTORY_CityScapes)
-    parser.add_argument("--data-list-cityscapes", type=str, default=DATA_LIST_PATH_CityScapes)
-    parser.add_argument("--data-dir-idd", type=str, default=DATA_DIRECTORY_IDD)
-    parser.add_argument("--data-list-idd", type=str, default=DATA_LIST_PATH_IDD)
-    parser.add_argument("--ignore-label", type=int, default=IGNORE_LABEL,
-                        help="The index of the label to ignore during the training.")
-    parser.add_argument("--num-classes", type=int, default=NUM_CLASSES,
-                        help="Number of classes to predict (including background).")
+    parser.add_argument("--target", type=str, default=TARGET)
+    parser.add_argument("--mnist", action='store_true', default=MNIST)
+    parser.add_argument("--usps", action='store_true', default=USPS)
+    parser.add_argument("--syn", action='store_true', default=SYN)
+    parser.add_argument("--mnistm", action='store_true', default=MNISTM)
+    parser.add_argument("--svhn", action='store_true', default=SVHN)
+
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                              help="Number of images sent to the network in one step.")
     parser.add_argument("--set", type=str, default=SET,
@@ -94,11 +62,35 @@ def get_arguments():
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
     parser.add_argument("--dir-name", type=str, default=DIR_NAME)
+    parser.add_argument("--case", type=int, default=0)
+    parser.add_argument("--lambda-adv", type=float, default=1.5,
+                             help="lambda_adv for adversarial training.")
+
     return parser.parse_args()
 
 
 def main():
     args = get_arguments()
+
+    continual_list = ['mnist', 'usps', 'mnistm', 'syn', 'svhn']
+
+    if args.case == 1:
+        args.target = 'usps'
+        num_target = 1
+
+    elif args.case == 2:
+        args.target = 'mnistm'
+        num_target = 2
+
+    elif args.case == 3:
+        args.target = 'syn'
+        num_target = 3
+
+    elif args.case == 4:
+        args.target = 'svhn'
+        num_target = 4
+    else:
+        num_target = continual_list.index(args.target)
 
     seed = args.random_seed
     torch.manual_seed(seed)
@@ -108,47 +100,16 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    input_size = (512, 256)
-
-    if args.num_classes == 13:
-        name_classes = np.asarray(["road",
-                                   "sidewalk",
-                                   "building",
-                                   "light",
-                                   "sign",
-                                   "vegetation",
-                                   "sky",
-                                   "person",
-                                   "rider",
-                                   "car",
-                                   "bus",
-                                   "motorcycle",
-                                   "bicycle"])
-    elif args.num_classes == 18:
-        name_classes = np.asarray(["road",
-                                   "sidewalk",
-                                   "building",
-                                   "wall",
-                                   "fence",
-                                   "pole",
-                                   "light",
-                                   "sign",
-                                   "vegetation",
-                                   "sky",
-                                   "person",
-                                   "rider",
-                                   "car",
-                                   "truck",
-                                   "bus",
-                                   "train",
-                                   "motorcycle",
-                                   "bicycle"])
-    else:
-        NotImplementedError("Unavailable number of classes")
 
     # Create the model and start the evaluation process
-    model = Deeplab_DM(args=args)
+    model = AlexNet_DM(num_target=num_target)
+    args.dir_name = args.dir_name + args.target + str(args.lambda_adv)
+
+    # model = AlexNet_Source()
+    # args.dir_name = 'mnist_mnist'
+
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
+        print(args.dir_name)
         print('Step: ', (files + 1) * args.save_pred_every)
         saved_state_dict = torch.load('./snapshots/' + args.dir_name + '/' + str((files + 1) * args.save_pred_every) + '.pth')
         # saved_state_dict = torch.load('./snapshots/' + '30000.pth')
@@ -162,117 +123,106 @@ def main():
         model = model.to(device)
 
         model.eval()
-        if args.gta5:
-            gta5_loader = torch.utils.data.DataLoader(
-                GTA5DataSet(args.data_dir_gta5, args.data_list_gta5,
-                            crop_size=input_size, ignore_label=args.ignore_label,
-                            set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
-
-            hist = np.zeros((args.num_classes, args.num_classes))
-            for i, data in enumerate(gta5_loader):
-                images_val, labels, _ = data
+        if args.mnist:
+            targetloader, test_dataloader = dataset_read('mnist', 16)
+            count = 0
+            correct = 0
+            for i, data in enumerate(test_dataloader):
+                images_val, labels= data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
+                feat_new, feat_ori, pred, output_ori = model(images_val)
                 _, pred = pred.max(dim=1)
-
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
+                correct += (pred == labels).sum()
+                count += pred.shape[0]
 
-                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            mIoUs = per_class_iu(hist)
-            if args.mIoUs_per_class:
-                for ind_class in range(args.num_classes):
-                    print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
-            print('===> mIoU (GTA5): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
-            print('=' * 50)
+            acc_val_1 = correct / count
+            print('(MNIST): ' + str(round(np.nanmean(acc_val_1) * 100, 2)))
 
-        if args.synthia:
-            synthia_loader = torch.utils.data.DataLoader(
-                SYNTHIADataSet(args.data_dir_synthia, args.data_list_synthia,
-                               crop_size=input_size, ignore_label=args.ignore_label,
-                               set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
-
-            hist = np.zeros((args.num_classes, args.num_classes))
-            for i, data in enumerate(synthia_loader):
-                images_val, labels, _ = data
+        if args.usps:
+            targetloader, test_dataloader = dataset_read('usps', 16)
+            count = 0
+            correct = 0
+            for i, data in enumerate(test_dataloader):
+                images_val, labels = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
+                if args.case > 1:
+                    num_target = 1
+                else:
+                    num_target = None
+                feat_new, feat_ori, pred, output_ori = model(images_val, num_target=num_target)
                 _, pred = pred.max(dim=1)
-
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
+                correct += (pred == labels).sum()
+                count += pred.shape[0]
 
-                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            mIoUs = per_class_iu(hist)
-            if args.mIoUs_per_class:
-                for ind_class in range(args.num_classes):
-                    print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
-            print('===> mIoU (SYNTHIA): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
-            print('=' * 50)
+            acc_val_1 = correct / count
+            print('(USPS): ' + str(round(np.nanmean(acc_val_1) * 100, 2)))
 
-        if args.cityscapes:
-            cityscapes_loader = torch.utils.data.DataLoader(
-                cityscapesDataSet(args.data_dir_cityscapes, args.data_list_cityscapes,
-                                  crop_size=input_size, ignore_label=args.ignore_label,
-                                  set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
-
-            hist = np.zeros((args.num_classes, args.num_classes))
-            for i, data in enumerate(cityscapes_loader):
-                images_val, labels, _ = data
+        if args.mnistm:
+            targetloader, test_dataloader = dataset_read('mnistm', 16)
+            count = 0
+            correct = 0
+            for i, data in enumerate(test_dataloader):
+                images_val, labels = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
+                if args.case > 2:
+                    num_target = 2
+                else:
+                    num_target = None
+                feat_new, feat_ori, pred, output_ori = model(images_val, num_target=num_target)
                 _, pred = pred.max(dim=1)
-
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
+                correct += (pred == labels).sum()
+                count += pred.shape[0]
 
-                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            mIoUs = per_class_iu(hist)
-            if args.mIoUs_per_class:
-                for ind_class in range(args.num_classes):
-                    print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
-            print('===> mIoU (CityScapes): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
-            print('=' * 50)
+            acc_val_1 = correct / count
+            print('MNISTM: ' + str(round(np.nanmean(acc_val_1) * 100, 2)))
 
-        if args.idd:
-            idd_loader = torch.utils.data.DataLoader(
-                IDDDataSet(args.data_dir_idd, args.data_list_idd,
-                           crop_size=input_size, ignore_label=args.ignore_label,
-                           set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
-
-            hist = np.zeros((args.num_classes, args.num_classes))
-            for i, data in enumerate(idd_loader):
-                images_val, labels, _ = data
+        if args.syn:
+            targetloader, test_dataloader = dataset_read('syn', 16)
+            count = 0
+            correct = 0
+            for i, data in enumerate(test_dataloader):
+                images_val, labels = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1080, 1920), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1080, 1920), mode='nearest')(labels)
+                if args.case > 3:
+                    num_target = 3
+                else:
+                    num_target = None
+                feat_new, feat_ori, pred, output_ori = model(images_val, num_target=num_target)
                 _, pred = pred.max(dim=1)
-
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
+                correct += (pred == labels).sum()
+                count += pred.shape[0]
 
-                hist += fast_hist(labels.flatten(), pred.flatten(), args.num_classes)
-            mIoUs = per_class_iu(hist)
-            if args.mIoUs_per_class:
-                for ind_class in range(args.num_classes):
-                    print('==>' + name_classes[ind_class] + ':\t' + str(round(mIoUs[ind_class] * 100, 2)))
-            print('===> mIoU (IDD): ' + str(round(np.nanmean(mIoUs) * 100, 2)))
-            print('=' * 50)
+            acc_val_1 = correct / count
+            print('(SYN): ' + str(round(np.nanmean(acc_val_1) * 100, 2)))
+
+        if args.svhn:
+            targetloader, test_dataloader = dataset_read('svhn', 16)
+            count = 0
+            correct = 0
+            for i, data in enumerate(test_dataloader):
+                images_val, labels= data
+                images_val, labels = images_val.to(device), labels.to(device)
+                feat_new, feat_ori, pred, output_ori = model(images_val)
+                _, pred = pred.max(dim=1)
+                labels = labels.cpu().numpy()
+                pred = pred.cpu().detach().numpy()
+                correct += (pred == labels).sum()
+                count += pred.shape[0]
+
+            acc_val_1 = correct / count
+            print('(SVHN): ' + str(round(np.nanmean(acc_val_1) * 100, 2)))
+            print('\n')
+
+
+
 
 if __name__ == '__main__':
     main()

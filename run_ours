@@ -1,0 +1,21 @@
+#! /bin/bash
+
+for gan in Vanilla Hinge LS
+do
+  for lambda in 1.0 1.5 2.0 2.5 3.0
+  do
+      for case in 1 2 3 4
+      do
+          echo $case | tee -a result/train/mnist_DM.txt
+          python train_mnist_DM.py --case=$case --lambda-adv=$lambda --gan=$gan | tee -a result/train/mnist_DM.txt
+      done
+
+
+      for case in 1 2 3 4
+      do
+          echo $case | tee -a result/eval/eval_mnist_DM.txt
+          python evaluate_mnist.py --case=$case --lambda-adv=$lambda | tee -a result/eval/eval_mnist_DM.txt
+      done
+  done
+done
+
