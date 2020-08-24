@@ -34,7 +34,7 @@ IGNORE_LABEL = 255
 BATCH_SIZE = 8
 NUM_WORKERS = 4
 
-LOG_DIR = 'logs'
+LOG_DIR = 'log'
 
 
 SNAPSHOT_DIR = './snapshots'

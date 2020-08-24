@@ -32,7 +32,7 @@ IGNORE_LABEL = 255
 BATCH_SIZE = 1
 NUM_WORKERS = 1
 
-LOG_DIR = 'logs'
+LOG_DIR = 'log'
 
 if SOURCE == 'GTA5':
     # DATA_DIRECTORY = '/work/GTA5'
