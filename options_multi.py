@@ -1,7 +1,7 @@
 import argparse
 
 FROM_SCRATCH = True
-DM = False
+DM = True
 
 SAVE_PRED_EVERY = 5000
 NUM_STEPS_STOP = 150000  # early stopping
@@ -11,7 +11,7 @@ SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 TARGET = 'CityScapes'  # 'CityScapes' or 'IDD'
 SET = 'train'
 
-DIR_NAME = 'AdaptSegNet_Vanilla(SpecX)_multi'
+DIR_NAME = 'AdaptSegNet_new_Hinge(SpecO)_multi_DM'
 
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
@@ -20,8 +20,8 @@ POWER = 0.9
 
 LEARNING_RATE_D = 1e-4
 
-GAN = 'Vanilla'  # 'Vanilla' or 'LS' or 'Hinge' or 'new_Hinge'
-SPEC = False
+GAN = 'new_Hinge'  # 'Vanilla' or 'LS' or 'Hinge' or 'new_Hinge'
+SPEC = True
 
 LAMBDA_ADV2 = 0.001
 LAMBDA_ADV1 = 0.0002

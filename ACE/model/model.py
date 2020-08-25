@@ -38,6 +38,7 @@ class Generator(nn.Module):
 
         x = self.relu(self.conv8(x))
         x = self.conv9(x)
+        x = nn.Upsample(size=(512, 1024), mode='nearest')(x)
 
         return x
 
@@ -88,7 +89,7 @@ class VGG19features(nn.Module):
         x1 = self.relu(self.conv32(x1))
         x1 = self.maxpool(self.relu(self.conv34(x1)))
 
-        return x
+        return x1
 
 def init_weights(net, init_type='normal', init_gain=0.02):
     """Initialize network weights.

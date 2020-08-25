@@ -107,17 +107,15 @@ class Classifier_Module(nn.Module):
         for dilation, padding in zip(dilation_series, padding_series):
             self.conv2d_list.append(
                 nn.Conv2d(inplanes, num_classes, kernel_size=3, stride=1, padding=padding, dilation=dilation, bias=True))
-        self.conv2d_list.append(nn.Conv2d(inplanes, num_classes, kernel_size=3, stride=1, padding=1))
 
         for m in self.conv2d_list:
             m.weight.data.normal_(0, 0.01)
 
     def forward(self, x):
         out = self.conv2d_list[0](x)
-        for i in range(len(self.conv2d_list) - 2):
+        for i in range(len(self.conv2d_list) - 1):
             out += self.conv2d_list[i + 1](x)
-        feat_out = self.conv2d_list[4](x)
-        return out, feat_out
+        return out
 
 
 class ResNet(nn.Module):
@@ -175,19 +173,12 @@ class ResNet(nn.Module):
 
         x = self.layer3(x)
 
-        # x = self.layer4(x)
-        # x2 = self.layer6(x)
-        #
-        # x2 = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
-
         x = self.layer4(x)
-        x2, x1 = self.layer6(x)
+        x2 = self.layer6(x)
 
-        x1 = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x1)
         x2 = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)(x2)
 
-        # return x2
-        return x2, x1
+        return x2
 
     def get_1x_lr_params_NOscale(self):
         """

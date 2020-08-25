@@ -209,9 +209,6 @@ def main():
         else:
             _, _, pred2, pred1 = model(images, input_size)
 
-        # pred1 = pred_ori1
-        # pred2 = pred_ori2
-
         loss_seg1 = seg_loss(pred1, labels)
         loss_seg2 = seg_loss(pred2, labels)
         loss = loss_seg2 + args.lambda_seg * loss_seg1
@@ -290,7 +287,7 @@ def main():
         else:
             # train with source
             D_out1 = model_D1(F.softmax(pred1, dim=1))
-            D_out2 = model_D2(F.softmax(pred2, dim=2))
+            D_out2 = model_D2(F.softmax(pred2, dim=1))
 
             loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
             loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))

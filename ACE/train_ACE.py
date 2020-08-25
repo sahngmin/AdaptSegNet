@@ -18,10 +18,10 @@ from dataset.idd_dataset import IDDDataSet
 from ACE.model.model import Generator, VGG19features
 # from model.model import Generator, VGG19features
 
-MONITOR = True
+MONITOR = False
 
-BATCH_SIZE = 3
-NUM_STEPS = 50000
+BATCH_SIZE = 1
+NUM_STEPS = 150000
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 if SOURCE == 'GTA5':
@@ -39,7 +39,7 @@ if NUM_TARGET == 1:
     DATA_DIRECTORY_TARGET = '/work/CityScapes'
     DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
     LR_GEN = 1e-3
-    RESTORE_FROM_DEEPLAB = './pretrained_snapshot/GTA5_15000.pth'
+    RESTORE_FROM_DEEPLAB = './pretrained_snapshot/.pth'
     MEMORY = None
     GENERATOR_FILE = None
 elif NUM_TARGET == 2:
@@ -60,13 +60,13 @@ def lr_power(base_lr, iter, power, interval):
     return base_lr * pow(power, int(iter / interval))
 
 def adjust_learning_rate_seg(optimizer, i_iter, lr, args):
-    # lr = lr_poly(lr, i_iter, args.num_steps, 0.9)
-    lr = lr_power(lr, i_iter, 0.9, 1000)
+    lr = lr_poly(lr, i_iter, args.num_steps, 0.9)
+    # lr = lr_power(lr, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
 
 def adjust_learning_rate_gen(optimizer, i_iter, lr, args):
-    # lr = lr_poly(lr, i_iter, args.num_steps, 0.9)
-    lr = lr_power(lr, i_iter, 0.9, 1000)
+    lr = lr_poly(lr, i_iter, args.num_steps, 0.9)
+    # lr = lr_power(lr, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
 
 def get_arguments():
@@ -100,12 +100,12 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
+    torch.backends.cudnn.enabled = True  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
-    input_size = (512, 256)
+    input_size = (1024, 512)
 
     # cudnn.enabled = True
 
@@ -154,13 +154,13 @@ def main():
             GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
                         crop_size=input_size, ignore_label=args.ignore_label,
                         set=args.set, num_classes=args.num_classes),
-            batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+            batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=True)
     elif args.source == 'SYNTHIA':
         trainloader = data.DataLoader(
             SYNTHIADataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
                            crop_size=input_size, ignore_label=args.ignore_label,
                            set=args.set, num_classes=args.num_classes),
-            batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+            batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=True)
     else:
         raise NotImplementedError('Unavailable source domain')
 
@@ -172,14 +172,14 @@ def main():
                                                                      crop_size=input_size,
                                                                      ignore_label=args.ignore_label,
                                                                      set=args.set),
-                                                   batch_size=1, shuffle=True, num_workers=4, pin_memory=True)
+                                                   batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
     elif args.target == 'IDD':
         targetloader = torch.utils.data.DataLoader(IDDDataSet(args.data_dir_target, args.data_list_target,
                                                               max_iters=args.num_steps,
                                                               crop_size=input_size,
                                                               ignore_label=args.ignore_label,
                                                               set=args.set),
-                                                   batch_size=1, shuffle=True, num_workers=4, pin_memory=True)
+                                                   batch_size=1, shuffle=True, num_workers=0, pin_memory=True)
     else:
         raise NotImplementedError("Unavailable target domain")
     targetloader_iter = enumerate(targetloader)

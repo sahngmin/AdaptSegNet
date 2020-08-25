@@ -13,8 +13,8 @@ from dataset.idd_dataset import IDDDataSet
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 NUM_TARGET = 1
 EVAL_TARGET = -1
-DM = False
-DIR_NAME = 'AdaptSegNet_Vanilla(SpecX)_multi'
+DM = True
+DIR_NAME = 'AdaptSegNet_new_Hinge(SpecO)_multi_DM'
 
 GTA5 = True
 SYNTHIA = False

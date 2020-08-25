@@ -19,9 +19,9 @@ IDD = False
 PER_CLASS = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 50000
+NUM_STEPS_STOP = 150000
 
-BATCH_SIZE = 8
+BATCH_SIZE = 1
 
 DATA_DIRECTORY_GTA5 = '/work/GTA5'
 DATA_LIST_PATH_GTA5 = './dataset/gta5_list/val.txt'
@@ -86,11 +86,11 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
+    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
-    input_size = (512, 256)
+    input_size = (1024, 512)
 
     if args.num_classes == 13:
         name_classes = np.asarray(["road",

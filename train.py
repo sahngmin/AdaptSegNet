@@ -47,8 +47,7 @@ def main():
     seed = args.random_seed
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
+    torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     random.seed(seed)
 
@@ -191,8 +190,7 @@ def main():
         images = images.to(device)
         labels = labels.long().to(device)
 
-        # pred = model(images, input_size)
-        pred, feat = model(images, input_size)
+        pred = model(images, input_size)
 
         loss_seg = seg_loss(pred, labels)
         loss = loss_seg
@@ -205,14 +203,12 @@ def main():
             images_target, _, _ = batch
             images_target = images_target.to(device)
 
-            # pred_target = model(images_target, input_size_target)
-            pred_target, feat_target = model(images_target, input_size_target)
+            pred_target = model(images_target, input_size_target)
 
             if args.gan == 'Hinge':
                 loss_adv = adversarial_loss(F.softmax(pred_target, dim=1), generator=True)
             else:
-                # D_out = model_D(F.softmax(pred_target, dim=1))
-                D_out = model_D(F.softmax(torch.cat((pred_target, feat_target), dim=1), dim=1))
+                D_out = model_D(F.softmax(pred_target, dim=1))
 
                 loss_adv = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
 
@@ -237,8 +233,7 @@ def main():
                 loss_D_value += loss_D.item()
             else:
                 # train with source
-                # D_out = model_D(F.softmax(pred, dim=1))
-                D_out = model_D(F.softmax(torch.cat((pred, feat), dim=1), dim=1))
+                D_out = model_D(F.softmax(pred, dim=1))
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
                 loss_D = loss_D / 2
@@ -247,8 +242,7 @@ def main():
                 loss_D_value += loss_D.item()
 
                 # train with target
-                # D_out = model_D(F.softmax(pred_target, dim=1))
-                D_out = model_D(F.softmax(torch.cat((pred_target, feat_target), dim=1), dim=1))
+                D_out = model_D(F.softmax(pred_target, dim=1))
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).to(device))
                 loss_D = loss_D / 2

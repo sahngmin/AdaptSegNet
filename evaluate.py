@@ -102,7 +102,6 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # 멀티 gpu 연산 무작위 고정
-    # torch.backends.cudnn.enabled = False  # cudnn library를 사용하지 않게 만듬
     np.random.seed(seed)
     random.seed(seed)
 
@@ -167,11 +166,7 @@ def main():
             for i, data in enumerate(gta5_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
+                pred = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -196,11 +191,7 @@ def main():
             for i, data in enumerate(synthia_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
+                pred = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -225,11 +216,7 @@ def main():
             for i, data in enumerate(cityscapes_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
+                pred = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -254,11 +241,7 @@ def main():
             for i, data in enumerate(idd_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
-                # pred = model(images_val, input_size)
-                pred, _ = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1080, 1920), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1080, 1920), mode='nearest')(labels)
+                pred = model(images_val, input_size)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
