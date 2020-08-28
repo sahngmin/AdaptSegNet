@@ -20,8 +20,8 @@ from ACE.model.model import Generator, VGG19features
 
 MONITOR = False
 
-BATCH_SIZE = 1
-NUM_STEPS = 150000
+BATCH_SIZE = 3
+NUM_STEPS = 50000
 
 SOURCE = 'GTA5'  # 'GTA5' or 'SYNTHIA'
 if SOURCE == 'GTA5':
@@ -50,23 +50,18 @@ elif NUM_TARGET == 2:
     RESTORE_FROM_DEEPLAB = './snapshots/GTA5_CityScapes_50000.pth'
     MEMORY = 'CityScapes'
     GENERATOR_FILE = './snapshots/GTA5_CityScapes_50000_G.pth'
-    MEMORY_FILE = './memory/' + MEMORY + '.pt'
+    MEMORY_FILE = './memory/' + SOURCE + '_' + MEMORY + '.pt'
 
 
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
 
-def lr_power(base_lr, iter, power, interval):
-    return base_lr * pow(power, int(iter / interval))
-
 def adjust_learning_rate_seg(optimizer, i_iter, lr, args):
     lr = lr_poly(lr, i_iter, args.num_steps, 0.9)
-    # lr = lr_power(lr, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
 
 def adjust_learning_rate_gen(optimizer, i_iter, lr, args):
     lr = lr_poly(lr, i_iter, args.num_steps, 0.9)
-    # lr = lr_power(lr, i_iter, 0.9, 1000)
     optimizer.param_groups[0]['lr'] = lr
 
 def get_arguments():
@@ -105,9 +100,7 @@ def main():
     random.seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
-    input_size = (1024, 512)
-
-    # cudnn.enabled = True
+    input_size = (512, 256)
 
     # Create and load network
     # segmentation model
@@ -143,7 +136,7 @@ def main():
 
     optimizer_seg = optim.SGD(model.parameters(), lr=2.5e-4, momentum=0.9, weight_decay=5e-4)
     optimizer_gen = optim.SGD(generator.parameters(), lr=args.learning_rate, momentum=0.99, weight_decay=5e-5)
-    cudnn.benchmark = False
+    cudnn.benchmark = True
 
     optimizer_seg.zero_grad()
     optimizer_gen.zero_grad()
@@ -324,7 +317,7 @@ def main():
                 torch.save(generator.state_dict(), osp.join('./snapshots', args.source + '_' + MEMORY +
                                                         '_' + args.target + '_'
                                                         + str(args.num_steps) + '_G.pth'))
-            torch.save(statistics_memory, osp.join('./memory', args.target + '.pt'))
+            torch.save(statistics_memory, osp.join('./memory', args.source + '_' + args.target + '.pt'))
             break
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             if MEMORY == None:

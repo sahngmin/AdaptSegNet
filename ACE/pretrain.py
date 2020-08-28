@@ -10,15 +10,16 @@ import os
 import os.path as osp
 import random
 import argparse
-from model.deeplab_DM import Deeplab_DM
+from model.deeplab import Deeplab
 from dataset.synthia_dataset import SYNTHIADataSet
+from dataset.gta5_dataset import GTA5DataSet
 
-SOURCE = 'SYNTHIA04-DAWN'
-DATA_DIRECTORY = '/work/SYNTHIA-SEQS-04-DAWN'
-DATA_LIST_PATH = '/home/jk/Documents/AdaptSegNet/dataset/synthia_seqs_04_dawn_list/train.txt'
+SOURCE = 'SYNTHIA'  # 'GTA5' or 'SYNTHIA'
+DATA_DIRECTORY = '/work/GTA5'
+DATA_LIST_PATH = './dataset/gta5_list/train.txt'
+# DATA_DIRECTORY = '/work/SYNTHIA'
+# DATA_LIST_PATH = './dataset/synthia_list/train.txt'
 RESTORE_FROM_RESNET = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
-
-IMG_MEAN = np.array((0, 0, 0), dtype=np.float32)
 
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
@@ -38,20 +39,15 @@ def get_arguments():
     parser.add_argument("--restore-from-resnet", type=str, default=RESTORE_FROM_RESNET,
                         help="Where restore model parameters from.")
     parser.add_argument("--ignore-label", type=int, default=255)
-    parser.add_argument("--num-classes", type=int, default=11)
-    parser.add_argument("--batch-size", type=int, default=3)
+    parser.add_argument("--num-classes", type=int, default=18)
+    parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--set", type=str, default='train')
     parser.add_argument("--save-pred-every", type=int, default=5000)
-    parser.add_argument("--num-steps-stop", type=int, default=15000)
-    parser.add_argument("--num-steps", type=int, default=15000)
-    parser.add_argument("--num-dataset", type=int, default=1)
+    parser.add_argument("--num-steps-stop", type=int, default=30000)
+    parser.add_argument("--num-steps", type=int, default=30000)
     parser.add_argument("--learning-rate", type=float, default=2.5e-4)
 
     parser.add_argument("--random-seed", type=int, default=1338)
-    parser.add_argument("--memory", action='store_true', default=False)
-    parser.add_argument("--source-only", action='store_true', default=True)
-    parser.add_argument("--warper", action='store_true', default=False)
-    parser.add_argument("--feat-warp", default=True)
 
     return parser.parse_args()
 
@@ -70,7 +66,7 @@ def main():
     cudnn.enabled = True
 
     # Create and load network
-    model = Deeplab_DM(args=args)
+    model = Deeplab(args=args)
     saved_state_dict = model_zoo.load_url(args.restore_from_resnet)
     new_params = model.state_dict().copy()
     for i in saved_state_dict:
@@ -80,18 +76,23 @@ def main():
             new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
     model.load_state_dict(new_params)
 
-    trainloader = torch.utils.data.DataLoader(SYNTHIADataSet(args.data_dir, args.data_list,
-                                                              max_iters=args.num_steps * args.batch_size,
-                                                              crop_size=input_size,
-                                                              scale=False, mirror=False, mean=IMG_MEAN,
-                                                              set=args.set),
-                                               batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    trainloader = data.DataLoader(
+        GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+                    crop_size=input_size, ignore_label=args.ignore_label,
+                    set=args.set, num_classes=args.num_classes),
+        batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+
+    # trainloader = data.DataLoader(
+    #     SYNTHIADataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+    #                    crop_size=input_size, ignore_label=args.ignore_label,
+    #                    set=args.set, num_classes=args.num_classes),
+    #     batch_size=args.batch_size, shuffle=True, num_workers=0, pin_memory=True)
 
     trainloader_iter = enumerate(trainloader)
 
     model.train()
     model.to(device)
-    optimizer = optim.SGD(model.parameters_seg(args), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(model.optim_parameters(args), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
 
     cudnn.benchmark = True
     optimizer.zero_grad()
@@ -106,11 +107,11 @@ def main():
 
         _, batch = trainloader_iter.__next__()
 
-        images, labels, _, _ = batch
+        images, labels, _ = batch
         images = images.to(device)
         labels = labels.long().to(device)
 
-        _, _, _, pred = model(images, input_size)
+        pred = model(images, input_size)
 
         loss_seg = seg_loss(pred, labels)
         loss = loss_seg

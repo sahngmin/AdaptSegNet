@@ -19,7 +19,7 @@ IDD = False
 PER_CLASS = True
 
 SAVE_PRED_EVERY = 5000
-NUM_STEPS_STOP = 150000
+NUM_STEPS_STOP = 50000
 
 BATCH_SIZE = 1
 
@@ -90,7 +90,7 @@ def main():
     np.random.seed(seed)
     random.seed(seed)
 
-    input_size = (1024, 512)
+    input_size = (512, 256)
 
     if args.num_classes == 13:
         name_classes = np.asarray(["road",
@@ -144,16 +144,13 @@ def main():
                 GTA5DataSet(args.data_dir_gta5, args.data_list_gta5,
                             crop_size=input_size, ignore_label=args.ignore_label,
                             set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(gta5_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 pred = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1052, 1914), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1052, 1914), mode='nearest')(labels)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -172,16 +169,13 @@ def main():
                 SYNTHIADataSet(args.data_dir_synthia, args.data_list_synthia,
                                crop_size=input_size, ignore_label=args.ignore_label,
                                set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(synthia_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 pred = model(images_val, input_size)
-                # pred = nn.Upsample(size=(760, 1280), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(760, 1280), mode='nearest')(labels)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -200,16 +194,13 @@ def main():
                 cityscapesDataSet(args.data_dir_cityscapes, args.data_list_cityscapes,
                                   crop_size=input_size, ignore_label=args.ignore_label,
                                   set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(cityscapes_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 pred = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1024, 2048), mode='nearest')(labels)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()
@@ -228,16 +219,13 @@ def main():
                 IDDDataSet(args.data_dir_idd, args.data_list_idd,
                            crop_size=input_size, ignore_label=args.ignore_label,
                            set=args.set, num_classes=args.num_classes),
-                batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
             hist = np.zeros((args.num_classes, args.num_classes))
             for i, data in enumerate(idd_loader):
                 images_val, labels, _ = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 pred = model(images_val, input_size)
-                # pred = nn.Upsample(size=(1080, 1920), mode='bilinear', align_corners=True)(pred)
-                # labels = labels.unsqueeze(1)
-                # labels = nn.Upsample(size=(1080, 1920), mode='nearest')(labels)
                 _, pred = pred.max(dim=1)
 
                 labels = labels.cpu().numpy()

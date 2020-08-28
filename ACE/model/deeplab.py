@@ -217,12 +217,8 @@ class ResNet(nn.Module):
                 yield i
 
     def optim_parameters(self, args):
-        if args.from_scratch:
-            result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
-                      {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
-        else:
-            result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
-                      {'params': self.get_10x_lr_params(), 'lr': args.learning_rate}]
+        result = [{'params': self.get_1x_lr_params_NOscale(), 'lr': args.learning_rate},
+                  {'params': self.get_10x_lr_params(), 'lr': 10 * args.learning_rate}]
         return result
 
 
