@@ -94,6 +94,7 @@ def get_arguments():
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
     parser.add_argument("--dir-name", type=str, default=DIR_NAME)
+
     return parser.parse_args()
 
 

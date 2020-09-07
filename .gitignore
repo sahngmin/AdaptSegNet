@@ -158,6 +158,10 @@ dataset/
 ACE/pretrained_snapshot/
 ACE/snapshots/
 ACE/memory/
-
+run_one
+run_dann
+run_continual
+run_ours
+run
 
 ./DeepLab_resnet_pretrained_init-f81d91e8.pth

@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import random
-
+import pdb
 import torch
 from torch.utils import data
 from model.MNIST_model import AlexNet_DM, AlexNet_Source
@@ -65,14 +65,12 @@ def get_arguments():
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
     parser.add_argument("--dir-name", type=str, default=DIR_NAME)
-    parser.add_argument("--case", type=int, default=0)
+    parser.add_argument("--case", type=int, default=4)
     parser.add_argument("--lambda-adv", type=float, default=LAMBDA_ADV,
                              help="lambda_adv for adversarial training.")
     parser.add_argument("--gan", type=str, default='Hinge')
 
-    parser.add_argument("--continual", action='store_true', default=False)
-
-
+    parser.add_argument("--continual", action='store_true', default=True)
 
     return parser.parse_args()
 
@@ -85,27 +83,26 @@ def main():
     if args.case == 1:
         args.target = continual_list[1]
         num_target = 1
-
         if args.continual:
-            args.dir_name = args.dir_name + args.target + '1.3' + args.gan
+            args.dir_name = args.dir_name + args.target + '1.0' + args.gan
 
     elif args.case == 2:
         args.target = continual_list[2]
         num_target = 2
         if args.continual:
-            args.dir_name = args.dir_name + args.target + '2.5' + args.gan
+            args.dir_name = args.dir_name + args.target + '3.0' + args.gan
 
     elif args.case == 3:
         args.target = continual_list[3]
         num_target = 3
         if args.continual:
-            args.dir_name = args.dir_name + args.target + '1.1' + args.gan
+            args.dir_name = args.dir_name + args.target + str(args.lambda_adv) + args.gan
 
     elif args.case == 4:
         args.target = continual_list[4]
         num_target = 4
         if args.continual:
-            args.dir_name = args.dir_name + args.target + '2.9' + args.gan
+            args.dir_name = args.dir_name + args.target + '3.0' + args.gan
 
     else:
         num_target = continual_list.index(args.target)
@@ -166,10 +163,10 @@ def main():
                 images_val, labels = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 if args.case > 1:
-                    num_target = 1
+                    num_idx = 1
                 else:
-                    num_target = None
-                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_target)
+                    num_idx = None
+                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_idx)
                 _, pred = pred.max(dim=1)
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
@@ -189,10 +186,10 @@ def main():
                 images_val, labels = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 if args.case > 2:
-                    num_target = 2
+                    num_idx = 2
                 else:
-                    num_target = None
-                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_target)
+                    num_idx = None
+                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_idx)
                 _, pred = pred.max(dim=1)
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
@@ -213,10 +210,10 @@ def main():
                 images_val, labels = data
                 images_val, labels = images_val.to(device), labels.to(device)
                 if args.case > 3:
-                    num_target = 3
+                    num_idx = 3
                 else:
-                    num_target = None
-                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_target)
+                    num_idx = None
+                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_idx)
                 _, pred = pred.max(dim=1)
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()

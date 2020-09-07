@@ -63,11 +63,10 @@ class AlexNet_DM(nn.Module):
             nn.Dropout2d(),
             nn.Linear(100, 100),
             nn.BatchNorm1d(100),
-            nn.ReLU(inplace=True)
-        )
-        self.last_classifier = nn.Sequential(
+            nn.ReLU(inplace=True),
             nn.Linear(100, num_classes)
         )
+
 
         self.num_target = num_target
         for num in range(self.num_target):
@@ -77,7 +76,6 @@ class AlexNet_DM(nn.Module):
 
     def DM_params(self, args):
         DM_name = 'DM' + str(self.num_target)
-
         b = []
         b.append(getattr(self, DM_name).parameters())
 
@@ -90,44 +88,41 @@ class AlexNet_DM(nn.Module):
             optim_parameters = [{'params': self.features.parameters(), 'lr': args.learning_rate},
                                 {'params': self.last_feat.parameters(), 'lr': args.learning_rate},
                                 {'params': self.classifier.parameters(), 'lr': args.learning_rate},
-                                {'params': self.DM_params(args), 'lr': args.learning_rate},
-                                {'params': self.last_classifier.parameters(), 'lr': args.learning_rate}]
+                                {'params': self.DM_params(args), 'lr': args.learning_rate}]
 
         else:
-            optim_parameters = [{'params': self.features.parameters(), 'lr': 0.01 * args.learning_rate},
-                                {'params': self.last_feat.parameters(), 'lr': 0.01 * args.learning_rate},
-                                {'params': self.classifier.parameters(), 'lr': 0.01 * args.learning_rate},
-                                {'params': self.DM_params(args), 'lr': args.learning_rate},
-                                {'params': self.last_classifier.parameters(), 'lr': 0.01 * args.learning_rate}]
+            optim_parameters = [
+                                {'params': self.DM_params(args), 'lr': 10 * args.learning_rate}
+                                ]
 
         return optim_parameters
 
 
-    def forward(self, x, num_target=None):
+    def forward(self, x, dm_idx=None):
         x = self.features(x)
         out1 = x
         x2 = self.last_feat(x)
-        if num_target is None:
-            num_target = self.num_target
-        DM_name = 'DM' + str(num_target)
+        if dm_idx is None:
+            dm_idx = self.num_target
+        DM_name = 'DM' + str(dm_idx)
         dm_out1, dm_out2 = getattr(self, DM_name)(out1)
 
-        new_x = x2 + x2.view(x2.shape[0], 50, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
-                ((dm_out1 - dm_out1.view(x2.shape[0], 50, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
-                 dm_out1.view(x2.shape[0], 50, -1).std(dim=2, keepdim=True).unsqueeze(3))
-        new_x += x2.view(x2.shape[0], 50, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
-                 (dm_out2 - dm_out2.view(x2.shape[0], -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
-                 dm_out2.view(x2.shape[0], -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
+        # new_x = x2 + x2.view(x2.shape[0], 50, -1).std(dim=2, keepdim=True).unsqueeze(3) * \
+        #         ((dm_out1 - dm_out1.view(x2.shape[0], 50, -1).mean(dim=2, keepdim=True).unsqueeze(3)) /
+        #          dm_out1.view(x2.shape[0], 50, -1).std(dim=2, keepdim=True).unsqueeze(3))
+        # new_x += x2.view(x2.shape[0], 50, -1).mean(dim=2, keepdim=True).std(dim=1, keepdim=True).unsqueeze(3) * \
+        #          (dm_out2 - dm_out2.view(x2.shape[0], -1).mean(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)) / \
+        #          dm_out2.view(x2.shape[0], -1).std(dim=1, keepdim=True).unsqueeze(2).unsqueeze(3)
+
+        new_x = x2 + dm_out1 + dm_out2
 
         feat_ori = self.pooling(x2)
         output_ori = torch.flatten(feat_ori, 1)
         output_ori = self.classifier(output_ori)
-        output_ori = self.last_classifier(output_ori)
 
         feat_new = self.pooling(new_x)
         output_new = torch.flatten(feat_new, 1)
         output_new = self.classifier(output_new)
-        output_new = self.last_classifier(output_new)
 
         return feat_new, feat_ori, output_new, output_ori
 
@@ -237,6 +232,21 @@ class DANNModel(nn.Module):
         self.domain_classifier.add_module('d_relu1', nn.ReLU(True))
         self.domain_classifier.add_module('d_fc2', nn.Linear(100, 2))
         self.domain_classifier.add_module('d_softmax', nn.LogSoftmax(dim=1))
+
+    def optim_parameters(self, args):
+        if args.from_scratch:
+            optim_parameters = [{'params': self.feature.parameters(), 'lr': args.learning_rate},
+                                {'params': self.class_classifier.parameters(), 'lr': args.learning_rate},
+                                {'params': self.domain_classifier.parameters(), 'lr': args.learning_rate}]
+
+
+        else:
+            optim_parameters = [{'params': self.feature.parameters(), 'lr': 0.1 * args.learning_rate},
+                                {'params': self.class_classifier.parameters(), 'lr': 0.1 * args.learning_rate},
+                                {'params': self.domain_classifier.parameters(), 'lr': args.learning_rate}]
+
+        return optim_parameters
+
 
     def forward(self, input_data, alpha):
         # input_data = input_data.expand(input_data.data.shape[0], 3, 32, 32)

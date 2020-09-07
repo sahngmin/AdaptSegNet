@@ -9,7 +9,6 @@ from data.DigitFive.datasets.dataset_read import dataset_read
 
 
 DIR_NAME = 'mnist_'
-TARGET = 'usps'
 
 MNIST = True
 USPS = True
@@ -17,11 +16,8 @@ SYN = True
 MNISTM = True
 SVHN = True
 
-LAMBDA_ADV = 1.0
-
-
-SAVE_PRED_EVERY = 600
-NUM_STEPS_STOP = 6000
+SAVE_PRED_EVERY = 1000
+NUM_STEPS_STOP = 3000
 
 BATCH_SIZE = 16
 
@@ -46,7 +42,6 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="DeepLab-ResNet Network")
-    parser.add_argument("--target", type=str, default=TARGET)
     parser.add_argument("--mnist", action='store_true', default=MNIST)
     parser.add_argument("--usps", action='store_true', default=USPS)
     parser.add_argument("--syn", action='store_true', default=SYN)
@@ -66,13 +61,11 @@ def get_arguments():
                         help="Random seed to have reproducible results.")
     parser.add_argument("--dir-name", type=str, default=DIR_NAME)
     parser.add_argument("--case", type=int, default=0)
-    parser.add_argument("--lambda-adv", type=float, default=LAMBDA_ADV,
+    parser.add_argument("--lambda-adv", type=float, default=1.5,
                              help="lambda_adv for adversarial training.")
     parser.add_argument("--gan", type=str, default='Hinge')
 
-    parser.add_argument("--continual", action='store_true', default=False)
-
-
+    parser.add_argument("--continual", action='store_true', default=True)
 
     return parser.parse_args()
 
@@ -81,11 +74,11 @@ def main():
     args = get_arguments()
 
     continual_list = ['mnist', 'usps', 'mnistm', 'syn', 'svhn']
+    # continual_list = ['svhn', 'mnistm', 'syn', 'mnist', 'usps']
 
     if args.case == 1:
         args.target = continual_list[1]
         num_target = 1
-
         if args.continual:
             args.dir_name = args.dir_name + args.target + '1.3' + args.gan
 
@@ -107,8 +100,6 @@ def main():
         if args.continual:
             args.dir_name = args.dir_name + args.target + '2.9' + args.gan
 
-    else:
-        num_target = continual_list.index(args.target)
 
     seed = args.random_seed
     torch.manual_seed(seed)
@@ -119,11 +110,9 @@ def main():
     random.seed(seed)
 
     # Create the model and start the evaluation process
-    model = AlexNet_DM(num_target=num_target)
 
-    if not args.continual:
-        args.dir_name = args.dir_name + args.target + str(args.lambda_adv) + args.gan
-
+    model = AlexNet_Source()
+    args.dir_name = 'svhn'
 
     for files in range(int(args.num_steps_stop / args.save_pred_every)):
         print(args.dir_name)
@@ -141,7 +130,7 @@ def main():
         model.eval()
 
         if args.mnist:
-            targetloader, test_dataloader = dataset_read('mnist', args.batch_size)
+            targetloader, test_dataloader = dataset_read('mnist', 16)
             count = 0
             correct = 0
             for i, data in enumerate(test_dataloader):
@@ -155,11 +144,11 @@ def main():
                 count += pred.shape[0]
 
             acc_val_1 = correct / count
-            if not args.continual:
-                print('MNIST')
             print(str(round(np.nanmean(acc_val_1) * 100, 2)))
+
+
         if args.usps:
-            targetloader, test_dataloader = dataset_read('usps', args.batch_size)
+            targetloader, test_dataloader = dataset_read('usps', 16)
             count = 0
             correct = 0
             for i, data in enumerate(test_dataloader):
@@ -169,7 +158,7 @@ def main():
                     num_target = 1
                 else:
                     num_target = None
-                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_target)
+                feat_new, feat_ori, pred, output_ori = model(images_val)
                 _, pred = pred.max(dim=1)
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
@@ -177,12 +166,10 @@ def main():
                 count += pred.shape[0]
 
             acc_val_1 = correct / count
-            if not args.continual:
-                print('USPS')
             print(str(round(np.nanmean(acc_val_1) * 100, 2)))
 
         if args.mnistm:
-            targetloader, test_dataloader = dataset_read('mnistm', args.batch_size)
+            targetloader, test_dataloader = dataset_read('mnistm', 16)
             count = 0
             correct = 0
             for i, data in enumerate(test_dataloader):
@@ -192,7 +179,7 @@ def main():
                     num_target = 2
                 else:
                     num_target = None
-                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_target)
+                feat_new, feat_ori, pred, output_ori = model(images_val)
                 _, pred = pred.max(dim=1)
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
@@ -200,13 +187,10 @@ def main():
                 count += pred.shape[0]
 
             acc_val_1 = correct / count
-            if not args.continual:
-                print('MNISTM')
             print(str(round(np.nanmean(acc_val_1) * 100, 2)))
 
-
         if args.syn:
-            targetloader, test_dataloader = dataset_read('syn', args.batch_size)
+            targetloader, test_dataloader = dataset_read('syn', 16)
             count = 0
             correct = 0
             for i, data in enumerate(test_dataloader):
@@ -216,19 +200,18 @@ def main():
                     num_target = 3
                 else:
                     num_target = None
-                feat_new, feat_ori, pred, output_ori = model(images_val, dm_idx=num_target)
+                feat_new, feat_ori, pred, output_ori = model(images_val)
                 _, pred = pred.max(dim=1)
                 labels = labels.cpu().numpy()
                 pred = pred.cpu().detach().numpy()
                 correct += (pred == labels).sum()
                 count += pred.shape[0]
-            if not args.continual:
-                print('SYN')
+
             acc_val_1 = correct / count
             print(str(round(np.nanmean(acc_val_1) * 100, 2)))
 
         if args.svhn:
-            targetloader, test_dataloader = dataset_read('svhn', args.batch_size)
+            targetloader, test_dataloader = dataset_read('svhn', 16)
             count = 0
             correct = 0
             for i, data in enumerate(test_dataloader):
@@ -242,8 +225,6 @@ def main():
                 count += pred.shape[0]
 
             acc_val_1 = correct / count
-            if not args.continual:
-                print('SVHN')
             print(str(round(np.nanmean(acc_val_1) * 100, 2)))
 
         print('\n')

@@ -1,16 +1,16 @@
 #! /bin/bash
 
-#for case in 1 2 3 4
-#do
-#    echo $case | tee -a result/train_dann.txt
-#    python train_mnist_dann.py --case=$case | tee -a result/train_dann.txt
-#done
+for case in 1 2 3 4
+do
+    echo $case | tee -a result/train_dann.txt
+    python train_mnist_dann.py --case=$case --lambda-adv=4.0 | tee -a result/train_dann.txt
+done
 
 
 for case in 1 2 3 4
 do
-    echo $case | tee -a result/eval_dann.txt
-    python evaluate_dann.py --case=$case | tee -a result/eval_dann2.txt
+    echo $case | tee -a result/eval/eval_dann.txt
+    python evaluate_dann.py --case=$case --lambda-adv=4.0 | tee -a result/eval/eval_dann_uda.txt
 done
 
 

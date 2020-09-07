@@ -3,36 +3,39 @@ import argparse
 SOURCE_ONLY = False
 FROM_SCRATCH = True
 
-SAVE_PRED_EVERY = 500
-NUM_STEPS_STOP = 3000 # early stopping
-NUM_STEPS = 5000
+SAVE_PRED_EVERY = 600
+NUM_STEPS_STOP = 6000 # early stopping
+NUM_STEPS = 10000
 
 SET = 'train'
 
 DIR_NAME = 'mnist_'
-TARGET = 'svhn'
+TARGET = 'usps'
 PRE_TRAINED = ''
 
 NUM_TARGET = 1
 
+# LEARNING_RATE = 1e-3
+# LEARNING_RATE_D = 5e-4
+
 LEARNING_RATE = 1e-3
+LEARNING_RATE_D = 1e-3
+
 MOMENTUM = 0.9
 WEIGHT_DECAY = 0.0005
 POWER = 0.9
 
-LEARNING_RATE_D = 1e-3
-
 GAN = 'Hinge'  # 'Vanilla' or 'LS' or 'Hinge'
 
-LAMBDA_ADV = 1.5
-LAMBDA_DISTILL = 0.2
+LAMBDA_ADV = 4.0
+LAMBDA_DISTILL = 1.0
 
 RANDOM_SEED = 1338
 
 IGNORE_LABEL = 255
 
 BATCH_SIZE = 8
-NUM_WORKERS = 4
+NUM_WORKERS = 2
 
 LOG_DIR = 'log'
 
@@ -104,7 +107,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--gan", type=str, default=GAN,
                             help="choose the GAN objective.")
 
-        self.parser.add_argument("--from-scratch", action='store_true', default=FROM_SCRATCH)
+        self.parser.add_argument("--from-scratch", type=bool, default=FROM_SCRATCH)
         self.parser.add_argument("--source-only", action='store_true', default=SOURCE_ONLY)
 
         self.parser.add_argument("--dir-name", type=str, default=DIR_NAME)
@@ -113,7 +116,7 @@ class TrainOptions(BaseOptions):
 
         self.parser.add_argument("--target", type=str, default=TARGET)
 
-        self.parser.add_argument("--case", type=int, default=0)
+        self.parser.add_argument("--case", type=int, default=2)
 
 
 

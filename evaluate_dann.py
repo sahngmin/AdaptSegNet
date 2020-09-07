@@ -9,16 +9,17 @@ from data.DigitFive.datasets.dataset_read import dataset_read
 
 
 DIR_NAME = 'mnist_'
-TARGET = 'usps'
+TARGET = 'mnist'
 
 MNIST = True
 USPS = True
 SYN = True
 MNISTM = True
 SVHN = True
+UNION = False
 
-SAVE_PRED_EVERY = 500
-NUM_STEPS_STOP = 3000
+SAVE_PRED_EVERY = 600
+NUM_STEPS_STOP = 6000
 
 BATCH_SIZE = 16
 
@@ -49,6 +50,8 @@ def get_arguments():
     parser.add_argument("--syn", action='store_true', default=SYN)
     parser.add_argument("--mnistm", action='store_true', default=MNISTM)
     parser.add_argument("--svhn", action='store_true', default=SVHN)
+    parser.add_argument("--union", action='store_true', default=UNION)
+
 
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                              help="Number of images sent to the network in one step.")
@@ -89,6 +92,11 @@ def main():
     elif args.case == 4:
         args.target = 'svhn'
         num_target = 4
+
+    elif args.case == 5:
+        args.target = 'union'
+        num_target = 4
+
     else:
         num_target = continual_list.index(args.target)
 

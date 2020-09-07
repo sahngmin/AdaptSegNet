@@ -31,14 +31,9 @@ def lr_power(base_lr, iter, power, interval):
 def adjust_learning_rate(optimizer, i_iter, args):
     lr = lr_poly(args.learning_rate, i_iter, args.num_steps, args.power)
     # lr = lr_power(args.learning_rate, i_iter, 0.9, 1000)
-    optimizer.param_groups[0]['lr'] = lr
-    if len(optimizer.param_groups) > 1:
-        if args.from_scratch:
-            for i in range(1, len(optimizer.param_groups)):
-                optimizer.param_groups[i]['lr'] = lr * 10
-        else:
-            for i in range(1, len(optimizer.param_groups)):
-                optimizer.param_groups[i]['lr'] = lr
+    for i in range(len(optimizer.param_groups)):
+        optimizer.param_groups[i]['lr'] = lr
+
 
 def adjust_learning_rate_D(optimizer, i_iter):
     lr = lr_poly(args.learning_rate_D, i_iter, args.num_steps, args.power)
@@ -59,7 +54,6 @@ def main():
 
     # cudnn.enabled = True
     continual_list = ['mnist', 'usps', 'mnistm', 'syn', 'svhn']
-    num_target = continual_list.index(args.target)
     # Create network
     model = AlexNet_Source(num_classes=10)
     model.train()
@@ -73,11 +67,10 @@ def main():
                 new_params[i] = saved_state_dict[i]
         model.load_state_dict(new_params)
 
-
+    args.dir_name = 'svhn'
     # Dataloader
-    trainloader, test_dataloader_source = dataset_read('mnist', args.batch_size)
+    trainloader, test_dataloader_source = dataset_read(args.dir_name, args.batch_size)
     trainloader_iter = enumerate(trainloader)
-
 
 
     # implement model.optim_parameters(args) to handle different models' lr setting
@@ -85,10 +78,8 @@ def main():
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     optimizer.zero_grad()
 
-
     classify_loss = torch.nn.NLLLoss()
 
-    args.dir_name = args.dir_name + args.target
 
     # set up tensor board
     if args.tensorboard:
@@ -100,8 +91,6 @@ def main():
     for i_iter in range(args.num_steps):
 
         loss_classify_value = 0
-        loss_adv_value = 0
-        loss_D_value = 0
 
         optimizer.zero_grad()
         adjust_learning_rate(optimizer, i_iter, args)
